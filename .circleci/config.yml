@@ -153,7 +153,7 @@ commands:
           name: WEB tests
           command: |
             php -S localhost:8088 tests/router.php &>/dev/null &
-            php vendor/bin/atoum -p 'php -d memory_limit=512M' --debug --force-terminal --use-dot-report --bootstrap-file tests/bootstrap.php --no-code-coverage --max-children-number 1 -d tests/web
+            php vendor/bin/atoum -p 'php -d memory_limit=512M' --debug --force-terminal --use-dot-report --bootstrap-file tests/bootstrap.php --max-children-number 1 -d tests/web
             php ocular.phar code-coverage:upload --format=php-clover code-coverage/clover.xml
 
   # CSS test suite command.

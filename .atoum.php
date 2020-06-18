@@ -3,11 +3,11 @@
 $tests_dir = __DIR__ . '/tests/';
 $coverage_dir = $tests_dir . 'code-coverage/';
 
-/*if (!file_exists($coverage_dir)) {
+if (!file_exists($coverage_dir)) {
     mkdir($coverage_dir);
 }
 
-$coverageField = new atoum\report\fields\runner\coverage\html(
+/*$coverageField = new atoum\report\fields\runner\coverage\html(
     'GLPI',
     $coverage_dir
 );
@@ -19,7 +19,7 @@ $script
 
 $script->addDefaultReport();
 
-$cloverWriter = new atoum\writers\file($coverage_dir . '/clover.xml');
+$cloverWriter = new atoum\writers\file($coverage_dir . 'clover.xml');
 $cloverReport = new atoum\reports\asynchronous\clover();
 $cloverReport->addWriter($cloverWriter);
 
