@@ -1,0 +1,115 @@
+==== Pour les retours chariot  et les <BR> ==== 
+<note tip>
+Assez difficile dans le sens où il faut passer outre certaines fonctions : ticket créé par l'admin ou pas, via formulaire  ou pas pour le titre ou la description !  Comportement différent des suivis,créations et solutions par mail ou pas  !
+Enlever les \r\n mais il faut échapper  les ' aussi les laisser dans certains cas pour le sql !
+Même si on modifie le code des notifications, GLPI va chercher le champs description ailleurs !
+
+</note>
+  * Modifications ne pas faire en 9.4.6 déjà intégré dans le code ! : 
+  * ticketfollowup.form.php : ligne 41
+<code>
+if (isset($_POST["add"])) {
+   $fup->check(-1, CREATE, $_POST);
+   //YD
+   $_POST= str_replace( "\\r\\n", "<br>", $_POST);
+   //YD
+      $fup->add($_POST);
+</code>
+  *  notificationtargetcommonitilobject.class ligne 770
+après  $objettype = strtolower($item->getType()); et avant  $tab = '$2'
+<code>
+      $data["content"] = preg_replace('/\\r\\n\\r\\n/', "<br>",  $item->getField('content')); //YD
+      $data["content"] = preg_replace('/\n\n/', "<br/>", $data["content"]); //YD
+      $data["content"] = preg_replace('/\n/', "<br/>", $data["content"]); //YD
+      $data["content"] = preg_replace('/\\\\n/', "<br/>", $data["content"]); //YD
+      $data["##$objettype.title##"]        = $item->getField('name');
+      $data["##$objettype.content##"]      = $item->getField('content'); 
+      $data["##$objettype.description##"]      = $data["content"]; //YD
+      $data["##$objettype.id##"]           = sprintf("%07d", $item->getField("id"));
+            
+        
+           $data["##$objettype.content##"]      = $item->getField('content'); 
+           //$data["##$objettype.description##"]  = $item->getField('content'); // A remettre si nécessaire
+           
+       
+
+      $data["##$objettype.title##"]        = $item->getField('name');
+      $data["##$objettype.id##"]           = sprintf("%07d", $item->getField("id"));
+
+      $data["##$objettype.url##"]
+                        = $this->formatURL($options['additionnaloption']['usertype'],
+                                           $objettype."_".$item->getField("id"));
+
+      $tab = '$2';
+</code>
+* problème  lors de la réponse par mail  (ok via l'interface) à un ticket (pas de BR et corps de l'ancien message copié !)
+  * Modifications ne pas faire en 9.4.6 déjà intégré dans le code ! : 
+  * mailcollector.class.php ligne 742
+<code>
+        // Followup case
+                  $ticket = new Ticket();
+                  $fup = new TicketFollowup();
+
+                  if (!$ticket->getFromDB($tkt['tickets_id'])) {
+                     $error++;
+                     $rejinput['reason'] = NotImportedEmail::FAILED_OPERATION;
+                     $rejected->add($rejinput);
+                  } else if (!$CFG_GLPI['use_anonymous_followups']
+                             && !$ticket->canUserAddFollowups($tkt['_users_id_requester'])) {
+                     $this->deleteMails($uid, self::REFUSED_FOLDER);
+                     $refused++;
+                     $rejinput['reason'] = NotImportedEmail::NOT_ENOUGH_RIGHTS;
+                     $rejected->add($rejinput);
+                  } else
+                      
+                 {
+                    $tkt[content] = preg_replace('/\\r\\n\\r\\n/', "<br/>",  $tkt[content]); //YD
+                    $tkt[content] = preg_replace('/\n\n/', "<br/>", $tkt[content]); //YD
+                    $tkt[content] = preg_replace('/\n/', "<br/>", $tkt[content]); //YD
+                    $tkt[content]= preg_replace('/\\\\n/', "<br/>", $tkt[content]); //YD
+                    
+                    
+                  }
+</code>
+  * et ligne 1036
+<code>
+ $tkt['content'] = "";
+            foreach ($to_keep as $ID) {
+                 
+                 if (strpos($content[$ID], '</style>') !== FALSE ) { //YD
+                    $tkt['content'] .= "</style>"."\n"; //YD
+                    break; //YD
+                }//YD
+                if ((strpos($content[$ID], '<div class="moz-cite-prefix">Le ') !== FALSE ) || (strpos($content[$ID], 'a écrit :') !== FALSE )) { //YD
+                }else{//YD
+                    $tkt['content'] .= $content[$ID]."\n";//YD
+                }//YD
+</code>
+
+  * problème lors de la réponse par mail à un ticket fermé : des BR et corps de l'ancien message qui s'affiche :
+  *  version  < 9.4.6 :
+  * ligne 1066
+<code>
+// => to handle link in Ticket->post_addItem()
+            $tkt['_linkedto'] = $tkt['tickets_id'];
+            unset($tkt['tickets_id']);
+            
+            // ICI Debut seul  passage pour ticket close //YD
+            // il faut utiliser strstr et substr pas autre chose !!
+            
+            //debut de message avec chaine de caractères
+            
+            //$carToDelimite = 'http-equiv="Content-Type" content="text/html; charset=UTF-8">';
+            $carToDelimite = 'charset=UTF-8">';
+            
+           $string = $tkt['content'];    
+           $tkt['content'] = strstr($string, $carToDelimite)  ;
+                       
+            //fin de message avec chaine de caractères et <BR />
+            $carToDelimite2 = 'au dessus de cette ligne';
+            $string = $tkt['content'];    
+            $tkt['content'] = substr($string, 25, strpos($string,$carToDelimite2)); 
+            
+            // ICI Fin seul  passage pour ticket close //YD
+
+</code>
