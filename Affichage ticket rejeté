@@ -1,0 +1,18 @@
+  * A faire en 9.4.6
+  * Ne plus afficher les Tickets rejetés : ligne 5479 de ticket.class.php (mettre SOLVED et CLOSED)							
+<code>
+ case "rejected" : // on affiche les tickets rejet??s
+            $query .= " LEFT JOIN `glpi_itilsolutions`
+                           ON (`glpi_tickets`.`id` = `glpi_itilsolutions`.`items_id` AND `glpi_itilsolutions`.`itemtype` = 'Ticket')
+                        WHERE $is_deleted
+                             AND ($search_assign)
+                             AND `glpi_tickets`.`status` <> '".self::SOLVED."'
+                             AND `glpi_tickets`.`status` <> '".self::CLOSED."'
+			     AND `glpi_tickets`.`status` <> '".self::WAITING."'
+                             AND `glpi_itilsolutions`.`status` = '".CommonITILValidation::REFUSED."' ".
+                             getEntitiesRestrictRequest("AND", "glpi_tickets");
+            break;
+                  
+
+</code>
+ 
