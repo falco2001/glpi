@@ -1,0 +1,27 @@
+*  version  >= 9.4.6 : mailcollector.class.php
+  * ligne 1066
+<code>
+// => to handle link in Ticket->post_addItem()
+            $tkt['_linkedto'] = $tkt['tickets_id'];
+            unset($tkt['tickets_id']);
+            
+            // ICI Debut seul  passage pour ticket close //YD
+            // il faut utiliser strstr et substr pas autre chose !!
+            
+            //debut de message avec chaine de caractères
+            
+            //$carToDelimite = 'http-equiv="Content-Type" content="text/html; charset=UTF-8">';
+            $carToDelimite = 'charset=UTF-8">';
+            
+           $string = $tkt['content'];    
+           $tkt['content'] = strstr($string, $carToDelimite)  ;
+                       
+            //fin de message avec chaine de caractères et <BR />
+            $carToDelimite2 = 'au dessus de cette ligne';
+            $string = $tkt['content'];    
+            $tkt['content'] = substr($string, 25, strpos($string,$carToDelimite2)); 
+            
+            // ICI Fin seul  passage pour ticket close //YD
+
+</code>
+  
