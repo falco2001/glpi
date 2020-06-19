@@ -185,7 +185,6 @@ jobs:
     steps:
       - checkout:
           path: /home/circleci/codebase
-      - run: rm -rf /home/circleci/codebase/.git
       - persist_to_workspace:
           root: /home/circleci
           paths:
