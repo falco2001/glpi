@@ -959,11 +959,17 @@ abstract class NotificationTargetCommonITILObject extends NotificationTarget {
    function getDataForObject(CommonDBTM $item, array $options, $simple = false) {
       global $CFG_GLPI, $DB;
 
-      $objettype = strtolower($item->getType());
+     $objettype = strtolower($item->getType());
 
+      $data["content"] = preg_replace('/\\r\\n\\r\\n/', "<br>",  $item->getField('content')); //YD
+      $data["content"] = preg_replace('/\n\n/', "<br/>", $data["content"]); //YD
+      $data["content"] = preg_replace('/\n/', "<br/>", $data["content"]); //YD
+      $data["content"] = preg_replace('/\\\\n/', "<br/>", $data["content"]); //YD
+      
       $data["##$objettype.title##"]        = $item->getField('name');
       $data["##$objettype.content##"]      = $item->getField('content');
-      $data["##$objettype.description##"]  = $item->getField('content');
+      $data["##$objettype.description##"]  = $data["content"]; //YD
+      //$data["##$objettype.description##"]  = $item->getField('content');
       $data["##$objettype.id##"]           = sprintf("%07d", $item->getField("id"));
 
       $data["##$objettype.url##"]
