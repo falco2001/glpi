@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -49,6 +49,7 @@ class Provider extends DbTestCase {
     * @dataProvider itemProvider
     */
    public function testBigNumber(\CommonDBTM $item) {
+      $this->login();
 
       $itemtype = $item->getType();
       $data = [
@@ -65,7 +66,7 @@ class Provider extends DbTestCase {
                'icon',
             ]);
          $this->integer($result['number'])->isGreaterThan(0);
-         $this->string($result['url'])->isEqualTo($item::getSearchURL()."?reset");
+         $this->string($result['url'])->contains($item::getSearchURL());
          $this->string($result['label'])->isNotEmpty();
          $this->string($result['icon'])->isEqualTo($item::getIcon());
       }
@@ -124,6 +125,8 @@ class Provider extends DbTestCase {
     * @dataProvider itemFKProvider
     */
    public function testNbItemByFk(\CommonDBTM $item, \CommonDBTM $fk_item) {
+      $this->login();
+
       $result = \Glpi\Dashboard\Provider::nbItemByFk($item, $fk_item);
       $this->array($result)
          ->hasKeys([
@@ -205,6 +208,8 @@ class Provider extends DbTestCase {
 
 
    public function testGetTicketsStatus() {
+      $this->login();
+
       $result = \Glpi\Dashboard\Provider::getTicketsStatus();
       $this->array($result)
          ->hasKeys([
@@ -233,6 +238,8 @@ class Provider extends DbTestCase {
 
 
    public function testTopTicketsCategories() {
+      $this->login();
+
       $result = \Glpi\Dashboard\Provider::multipleNumberTicketByITILCategory();
       $this->array($result)
          ->hasKeys([
@@ -256,5 +263,32 @@ class Provider extends DbTestCase {
          $this->string($data['label']);
          $this->string($data['url'])->contains(\Ticket::getSearchURL());
       }
+   }
+
+   public function monthYearProvider() {
+      return [
+         [
+            'monthyear' => '2019-01',
+            'expected'  => [
+               '2019-01-01 00:00:00',
+               '2019-02-01 00:00:00'
+            ]
+         ], [
+            'monthyear' => '2019-12',
+            'expected'  => [
+               '2019-12-01 00:00:00',
+               '2020-01-01 00:00:00'
+            ]
+         ]
+      ];
+   }
+
+
+   /**
+    * @dataProvider monthYearProvider
+    */
+   public function testFormatMonthyearDates(string $monthyear, array $expected) {
+      $this->array(\Glpi\Dashboard\Provider::formatMonthyearDates($monthyear))
+         ->isEqualTo($expected);
    }
 }

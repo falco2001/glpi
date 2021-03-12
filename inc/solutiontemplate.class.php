@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -55,7 +55,7 @@ class SolutionTemplate extends CommonDropdown {
    function getAdditionalFields() {
 
       return [['name'  => 'solutiontypes_id',
-                         'label' => __('Solution type'),
+                         'label' => SolutionType::getTypeName(1),
                          'type'  => 'dropdownValue',
                          'list'  => true],
                    ['name'  => 'content',
@@ -78,7 +78,7 @@ class SolutionTemplate extends CommonDropdown {
 
       $tab[] = [
          'id'                 => '3',
-         'name'               => __('Solution type'),
+         'name'               => SolutionType::getTypeName(1),
          'field'              => 'name',
          'table'              => getTableForItemType('SolutionType'),
          'datatype'           => 'dropdown'

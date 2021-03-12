@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -39,7 +39,7 @@ if (!defined('GLPI_ROOT')) {
  *
  *  Relation between Problems and Items
 **/
-class Item_Problem extends CommonDBRelation{
+class Item_Problem extends CommonItilObject_Item {
 
 
    // From CommonDBRelation
@@ -52,9 +52,6 @@ class Item_Problem extends CommonDBRelation{
 
 
 
-   /**
-    * @since 0.84
-   **/
    function getForbiddenStandardMassiveAction() {
 
       $forbidden   = parent::getForbiddenStandardMassiveAction();
@@ -63,9 +60,6 @@ class Item_Problem extends CommonDBRelation{
    }
 
 
-   /**
-    * @see CommonDBTM::prepareInputForAdd()
-   **/
    function prepareInputForAdd($input) {
 
       // Avoid duplicate entry
@@ -143,8 +137,8 @@ class Item_Problem extends CommonDBRelation{
          $header_bottom .= "<th width='10'>".Html::getCheckAllAsCheckbox('mass'.__CLASS__.$rand);
          $header_bottom .= "</th>";
       }
-      $header_end .= "<th>".__('Type')."</th>";
-      $header_end .= "<th>".__('Entity')."</th>";
+      $header_end .= "<th>"._n('Type', 'Types', 1)."</th>";
+      $header_end .= "<th>".Entity::getTypeName(1)."</th>";
       $header_end .= "<th>".__('Name')."</th>";
       $header_end .= "<th>".__('Serial number')."</th>";
       $header_end .= "<th>".__('Inventory number')."</th></tr>";
@@ -213,6 +207,7 @@ class Item_Problem extends CommonDBRelation{
 
 
    function getTabNameForItem(CommonGLPI $item, $withtemplate = 0) {
+      global $DB;
 
       if (!$withtemplate) {
          $nb = 0;
@@ -227,7 +222,15 @@ class Item_Problem extends CommonDBRelation{
             case 'Group' :
             case 'Supplier' :
                if ($_SESSION['glpishow_count_on_tabs']) {
-                  $nb = self::countForItem($item);
+                  $from = $item->getType() == 'Group' ? 'glpi_groups_problems' : 'glpi_problems_' . strtolower($item->getType() . 's');
+                  $result = $DB->request([
+                     'COUNT'  => 'cpt',
+                     'FROM'   => $from,
+                     'WHERE'  => [
+                        $item->getForeignKeyField()   => $item->fields['id']
+                     ]
+                  ])->next();
+                  $nb = $result['cpt'];
                }
                return self::createTabEntry(Problem::getTypeName(Session::getPluralNumber()), $nb);
 

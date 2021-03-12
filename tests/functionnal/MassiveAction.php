@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -124,7 +124,7 @@ class MassiveAction extends DbTestCase {
       $ma_ko = 0;
 
       // Shunt constructor
-      $controller = new \atoum\mock\controller();
+      $controller = new \atoum\atoum\mock\controller();
       $controller->__construct = function($args){};
 
       // Create mock
@@ -257,6 +257,9 @@ class MassiveAction extends DbTestCase {
       CommonDBTM $item,
       bool $has_right
    ) {
+
+      $this->login(); // must be logged as MassiveAction uses Session::getLoginUserID()
+
       // Init vars
       $new_note_content = "Test add note";
       $old_session = $_SESSION['glpiactiveprofile'][$item::$rightname] ?? 0;

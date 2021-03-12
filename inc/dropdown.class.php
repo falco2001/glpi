@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -104,6 +104,7 @@ class Dropdown {
       $params['emptylabel']           = self::EMPTY_VALUE;
       //Display emptychoice ?
       $params['display_emptychoice']  = ($itemtype != 'Entity');
+      $params['placeholder']          = '';
       $params['display']              = true;
       $params['permit_select_parent'] = false;
       $params['addicon']              = true;
@@ -119,8 +120,9 @@ class Dropdown {
       $name         = $params['emptylabel'];
       $comment      = "";
 
-      // Check default value for dropdown : need to be a numeric
-      if ((strlen($params['value']) == 0) || !is_numeric($params['value']) && $params['value'] != 'mygroups') {
+      // Check default value for dropdown : need to be a numeric (or null)
+      if ($params['value'] !== null
+          && ((strlen($params['value']) == 0) || !is_numeric($params['value']) && $params['value'] != 'mygroups')) {
          $params['value'] = 0;
       }
 
@@ -165,15 +167,19 @@ class Dropdown {
             'width'                => $params['width'],
             'itemtype'             => $itemtype,
             'display_emptychoice'  => $params['display_emptychoice'],
+            'placeholder'          => $params['placeholder'],
             'displaywith'          => $params['displaywith'],
             'emptylabel'           => $params['emptylabel'],
             'condition'            => $params['condition'],
             'used'                 => $params['used'],
             'toadd'                => $params['toadd'],
-            'entity_restrict'      => (is_array($params['entity']) ? json_encode(array_values($params['entity'])) : $params['entity']),
+            'entity_restrict'      => ($entity_restrict = (is_array($params['entity']) ? json_encode(array_values($params['entity'])) : $params['entity'])),
             'on_change'            => $params['on_change'],
             'permit_select_parent' => $params['permit_select_parent'],
             'specific_tags'        => $params['specific_tags'],
+            '_idor_token'          => Session::getNewIDORToken($itemtype, [
+               'entity_restrict' => $entity_restrict,
+            ]),
       ];
 
       $output = "<span class='no-wrap'>";
@@ -233,8 +239,11 @@ class Dropdown {
             $output .= "<span class='fa fa-globe-americas pointer' title='".__s('Display on map')."' onclick='showMapForLocation(this)' data-fid='$field_id'></span>";
          }
 
-         $paramscomment = ['value' => '__VALUE__',
-                                'table' => $table];
+         $paramscomment = [
+            'value'       => '__VALUE__',
+            'itemtype'    => $itemtype,
+            '_idor_token' => Session::getNewIDORToken($itemtype)
+         ];
          if ($item->isField('knowbaseitemcategories_id')
              && Session::haveRight('knowbase', READ)) {
 
@@ -265,6 +274,7 @@ class Dropdown {
       }
       return $output;
    }
+
 
    /**
     * Add new condition
@@ -399,7 +409,7 @@ class Dropdown {
                   $name = sprintf(__('%1$s %2$s'), $name, $data["firstname"]);
                   if ($tooltip) {
                      if (!empty($data["phone"])) {
-                        $comment .= "<br>".sprintf(__('%1$s: %2$s'), "<span class='b'>".__('Phone'),
+                        $comment .= "<br>".sprintf(__('%1$s: %2$s'), "<span class='b'>".Phone::getTypeName(1),
                                                    "</span>".$data['phone']);
                      }
                      if (!empty($data["phone2"])) {
@@ -417,7 +427,7 @@ class Dropdown {
                                                    "</span>".$data['fax']);
                      }
                      if (!empty($data["email"])) {
-                        $comment .= "<br>".sprintf(__('%1$s: %2$s'), "<span class='b'>".__('Email'),
+                        $comment .= "<br>".sprintf(__('%1$s: %2$s'), "<span class='b'>"._n('Email', 'Emails', 1),
                                                    "</span>".$data['email']);
                      }
                   }
@@ -426,7 +436,7 @@ class Dropdown {
                case "glpi_suppliers" :
                   if ($tooltip) {
                      if (!empty($data["phonenumber"])) {
-                        $comment .= "<br>".sprintf(__('%1$s: %2$s'), "<span class='b'>".__('Phone'),
+                        $comment .= "<br>".sprintf(__('%1$s: %2$s'), "<span class='b'>".Phone::getTypeName(1),
                                                    "</span>".$data['phonenumber']);
                      }
                      if (!empty($data["fax"])) {
@@ -434,7 +444,7 @@ class Dropdown {
                                                    "</span>".$data['fax']);
                      }
                      if (!empty($data["email"])) {
-                        $comment .= "<br>".sprintf(__('%1$s: %2$s'), "<span class='b'>".__('Email'),
+                        $comment .= "<br>".sprintf(__('%1$s: %2$s'), "<span class='b'>"._n('Email', 'Emails', 1),
                                                    "</span>".$data['email']);
                      }
                   }
@@ -450,14 +460,14 @@ class Dropdown {
                   if ($tooltip) {
                      if (!empty($data['locations_id'])) {
                         $comment .= "<br>".sprintf(__('%1$s: %2$s'),
-                                                   "<span class='b'>".__('Location')."</span>",
+                                                   "<span class='b'>".Location::getTypeName(1)."</span>",
                                                    self::getDropdownName("glpi_locations",
                                                                            $data["locations_id"],
                                                                            false, $translate));
 
                      }
                      if (!empty($data['budgettypes_id'])) {
-                        $comment .= "<br>".sprintf(__('%1$s: %2$s'), "<span class='b'>".__('Type')."</span>",
+                        $comment .= "<br>".sprintf(__('%1$s: %2$s'), "<span class='b'>"._n('Type', 'Types', 1)."</span>",
                                        self::getDropdownName("glpi_budgettypes",
                                                             $data["budgettypes_id"], false, $translate));
 
@@ -742,7 +752,7 @@ class Dropdown {
          }
 
          $output = Html::getCheckbox($options);
-         if (!isset($options['display']) || $options['display'] == 'true') {
+         if (!isset($params['display']) || $params['display'] == 'true') {
             echo $output;
             return $rand;
          } else {
@@ -815,296 +825,165 @@ class Dropdown {
       if (is_null($optgroup)) {
          $optgroup = [
              __('Common') => [
-                 'Location'               => _n('Location', 'Locations',
-                                                Session::getPluralNumber()),
-                 'State'                  => _n('Status of items',
-                                                'Statuses of items',
-                                                Session::getPluralNumber()),
-                 'Manufacturer'           => _n('Manufacturer', 'Manufacturers',
-                                                Session::getPluralNumber()),
-                 'Blacklist'              => _n('Blacklist', 'Blacklists',
-                                                Session::getPluralNumber()),
-                 'BlacklistedMailContent' => __('Blacklisted mail content')
+                 'Location' => null,
+                 'State' => null,
+                 'Manufacturer' => null,
+                 'Blacklist' => null,
+                 'BlacklistedMailContent' => null
              ],
 
              __('Assistance') => [
-                 'ITILCategory'        => _n('Ticket category',
-                                             'Ticket categories',
-                                             Session::getPluralNumber()),
-                 'TaskCategory'        => _n('Task category', 'Task categories',
-                                             Session::getPluralNumber()),
-                 'TaskTemplate'        => _n('Task template', 'Task templates',
-                                             Session::getPluralNumber()),
-                 'SolutionType'        => _n('Solution type', 'Solution types',
-                                             Session::getPluralNumber()),
-                 'SolutionTemplate'    => _n('Solution template',
-                                             'Solution templates',
-                                             Session::getPluralNumber()),
-                 'RequestType'         => _n('Request source', 'Request sources',
-                                             Session::getPluralNumber()),
-                 'ITILFollowupTemplate' => _n('Followup template', 'Followup templates',
-                                             Session::getPluralNumber()),
-                 'ProjectState'        => _n('Project state', 'Project states',
-                                             Session::getPluralNumber()),
-                 'ProjectType'         => _n('Project type', 'Project types',
-                                             Session::getPluralNumber()),
-                 'ProjectTaskType'     => _n('Project tasks type',
-                                             'Project tasks types',
-                                             Session::getPluralNumber()),
-                 'ProjectTaskTemplate' => _n('Project task template', 'Project task templates',
-                                             Session::getPluralNumber()),
-                 'PlanningExternalEventTemplate'
-                                       => PlanningExternalEventTemplate::getTypeName(
-                                             Session::getPluralNumber()),
-                 'PlanningEventCategory'
-                                       => PlanningEventCategory::getTypeName(
-                                             Session::getPluralNumber()),
+                 'ITILCategory' => null,
+                 'TaskCategory' => null,
+                 'TaskTemplate' => null,
+                 'SolutionType' => null,
+                 'SolutionTemplate' => null,
+                 'RequestType' => null,
+                 'ITILFollowupTemplate' => null,
+                 'ProjectState' => null,
+                 'ProjectType' => null,
+                 'ProjectTaskType' => null,
+                 'ProjectTaskTemplate' => null,
+                 'PlanningExternalEventTemplate' => null,
+                 'PlanningEventCategory' => null,
              ],
 
              _n('Type', 'Types', Session::getPluralNumber()) => [
-                 'ComputerType'         => _n('Computer type',
-                                              'Computers types',
-                                              Session::getPluralNumber()),
-                 'NetworkEquipmentType' => _n('Networking equipment type',
-                                              'Networking equipment types',
-                                              Session::getPluralNumber()),
-                 'PrinterType'          => _n('Printer type', 'Printer types',
-                                              Session::getPluralNumber()),
-                 'MonitorType'          => _n('Monitor type', 'Monitor types',
-                                              Session::getPluralNumber()),
-                 'PeripheralType'       => _n('Devices type', 'Devices types',
-                                              Session::getPluralNumber()),
-                 'PhoneType'            => _n('Phone type', 'Phones types',
-                                              Session::getPluralNumber()),
-                 'SoftwareLicenseType'  => _n('License type', 'License types',
-                                              Session::getPluralNumber()),
-                 'CartridgeItemType'    => _n('Cartridge type',
-                                              'Cartridge types',
-                                              Session::getPluralNumber()),
-                 'ConsumableItemType'   => _n('Consumable type',
-                                              'Consumable types',
-                                              Session::getPluralNumber()),
-                 'ContractType'         => _n('Contract type', 'Contract types',
-                                              Session::getPluralNumber()),
-                 'ContactType'          => _n('Contact type', 'Contact types',
-                                              Session::getPluralNumber()),
-                 'DeviceGenericType'    => _n('Generic device type', 'Generic device types',
-                                              Session::getPluralNumber()),
-                 'DeviceSensorType'     => _n('Sensor type', 'Sensors types',
-                                              Session::getPluralNumber()),
-                 'DeviceMemoryType'     => _n('Memory type', 'Memory types',
-                                              Session::getPluralNumber()),
-                 'SupplierType'         => _n('Third party type',
-                                              'Third party types',
-                                              Session::getPluralNumber()),
-                 'InterfaceType'        => _n('Interface type (Hard drive...)',
-                                              'Interface types (Hard drive...)',
-                                              Session::getPluralNumber()) ,
-                 'DeviceCaseType'       => _n('Case type', 'Case types',
-                                              Session::getPluralNumber()),
-                 'PhonePowerSupply'     => _n('Phone power supply type',
-                                              'Phones power supply types',
-                                              Session::getPluralNumber()),
-                 'Filesystem'           => _n('File system', 'File systems',
-                                              Session::getPluralNumber()),
-                 'CertificateType'      => _n('Certificate type', 'Certificate types',
-                                               Session::getPluralNumber()),
-                 'BudgetType'           => _n('Budget type', 'Budget types',
-                                              Session::getPluralNumber()),
-                 'DeviceSimcardType'    => _n('Simcard type', 'Simcard types',
-                                              Session::getPluralNumber()),
-                 'LineType'             => _n('Line type', 'Line types',
-                                             Session::getPluralNumber()),
-                 'RackType'             => RackType::getTypeName(Session::getPluralNumber()),
-                 'PDUType'              => PDUType::getTypeName(Session::getPluralNumber()),
-                 'PassiveDCEquipmentType' => PassiveDCEquipmentType::getTypeName(Session::getPluralNumber()),
-                 'ClusterType'          => ClusterType::getTypeName(Session::getPluralNumber()),
+                 'ComputerType' => null,
+                 'NetworkEquipmentType' => null,
+                 'PrinterType' => null,
+                 'MonitorType' => null,
+                 'PeripheralType' => null,
+                 'PhoneType' => null,
+                 'SoftwareLicenseType' => null,
+                 'CartridgeItemType' => null,
+                 'ConsumableItemType' => null,
+                 'ContractType' => null,
+                 'ContactType' => null,
+                 'DeviceGenericType' => null,
+                 'DeviceSensorType' => null,
+                 'DeviceMemoryType' => null,
+                 'SupplierType' => null,
+                 'InterfaceType' => null,
+                 'DeviceCaseType' => null,
+                 'PhonePowerSupply' => null,
+                 'Filesystem' => null,
+                 'CertificateType' => null,
+                 'BudgetType' => null,
+                 'DeviceSimcardType' => null,
+                 'LineType' => null,
+                 'RackType' => null,
+                 'PDUType' => null,
+                 'PassiveDCEquipmentType' => null,
+                 'ClusterType' => null,
              ],
 
-             __('Model') => [
-                 'ComputerModel'         => _n('Computer model',
-                                               'Computer models',
-                                               Session::getPluralNumber()),
-                 'NetworkEquipmentModel' => _n('Networking equipment model',
-                                               'Networking equipment models',
-                                               Session::getPluralNumber()),
-                 'PrinterModel'          => _n('Printer model',
-                                               'Printer models',
-                                               Session::getPluralNumber()),
-                 'MonitorModel'          => _n('Monitor model',
-                                               'Monitor models',
-                                               Session::getPluralNumber()),
-                 'PeripheralModel'       => _n('Peripheral model',
-                                               'Peripheral models',
-                                               Session::getPluralNumber()),
-                 'PhoneModel'            =>  _n('Phone model', 'Phone models',
-                                                Session::getPluralNumber()),
+             _n('Model', 'Models', 1) => [
+                 'ComputerModel' => null,
+                 'NetworkEquipmentModel' => null,
+                 'PrinterModel' => null,
+                 'MonitorModel' => null,
+                 'PeripheralModel' => null,
+                 'PhoneModel' => null,
 
                   // Devices models :
-                  'DeviceCaseModel'          => _n('Device case model',
-                                                   'Device case models', Session::getPluralNumber()),
-                  'DeviceControlModel'       => _n('Device control model',
-                                                   'Device control models', Session::getPluralNumber()),
-                  'DeviceDriveModel'         => _n('Device drive model',
-                                                   'Device drive models', Session::getPluralNumber()),
-                  'DeviceGenericModel'       => _n('Device generic model',
-                                                   'Device generic models', Session::getPluralNumber()),
-                  'DeviceGraphicCardModel'   => _n('Device graphic card model',
-                                                   'Device graphic card models', Session::getPluralNumber()),
-                  'DeviceHardDriveModel'     => _n('Device hard drive model',
-                                                   'Device hard drive models', Session::getPluralNumber()),
-                  'DeviceMemoryModel'        => _n('Device memory model',
-                                                   'Device memory models', Session::getPluralNumber()),
-                  'DeviceMotherBoardModel'   => _n('Device mother board model',
-                                                   'Device mother board models', Session::getPluralNumber()),
-                  'DeviceNetworkCardModel'   => _n('Device network card model',
-                                                   'Device network card models', Session::getPluralNumber()),
-                  'DevicePciModel'           => _n('Other component model',
-                                                   'Other component models', Session::getPluralNumber()),
-                  'DevicePowerSupplyModel'   => _n('Device power supply model',
-                                                   'Device power supply models', Session::getPluralNumber()),
-                  'DeviceProcessorModel'     => _n('Device processor model',
-                                                   'Device processor models', Session::getPluralNumber()),
-                  'DeviceSoundCardModel'     => _n('Device sound card model',
-                                                   'Device sound card models', Session::getPluralNumber()),
-                  'DeviceSensorModel'        => _n('Device sensor model',
-                                                   'Device sensor models', Session::getPluralNumber()),
-                  'RackModel'                => RackModel::getTypeName(Session::getPluralNumber()),
-                  'EnclosureModel'           => EnclosureModel::getTypeName(Session::getPluralNumber()),
-                  'PDUModel'                 => PDUModel::getTypeName(Session::getPluralNumber()),
-                  'PassiveDCEquipmentModel'  => PassiveDCEquipmentModel::getTypeName(Session::getPluralNumber()),
+                  'DeviceCaseModel' => null,
+                  'DeviceControlModel' => null,
+                  'DeviceDriveModel' => null,
+                  'DeviceGenericModel' => null,
+                  'DeviceGraphicCardModel' => null,
+                  'DeviceHardDriveModel' => null,
+                  'DeviceMemoryModel' => null,
+                  'DeviceMotherBoardModel' => null,
+                  'DeviceNetworkCardModel' => null,
+                  'DevicePciModel' => null,
+                  'DevicePowerSupplyModel' => null,
+                  'DeviceProcessorModel' => null,
+                  'DeviceSoundCardModel' => null,
+                  'DeviceSensorModel' => null,
+                  'RackModel' => null,
+                  'EnclosureModel' => null,
+                  'PDUModel' => null,
+                  'PassiveDCEquipmentModel' => null,
              ],
 
              _n('Virtual machine', 'Virtual machines', Session::getPluralNumber()) => [
-                 'VirtualMachineType'   => _n('Virtualization system',
-                                              'Virtualization systems',
-                                              Session::getPluralNumber()),
-                 'VirtualMachineSystem' => _n('Virtualization model',
-                                              'Virtualization models',
-                                             Session::getPluralNumber()),
-                 'VirtualMachineState'  => _n('State of the virtual machine',
-                                              'States of the virtual machine',
-                                              Session::getPluralNumber())
+                 'VirtualMachineType' => null,
+                 'VirtualMachineSystem' => null,
+                 'VirtualMachineState' => null
              ],
 
              __('Management') => [
-                 'DocumentCategory' => _n('Document heading',
-                                          'Document headings',
-                                          Session::getPluralNumber()),
-                 'DocumentType'     => _n('Document type', 'Document types',
-                                          Session::getPluralNumber()),
-                 'BusinessCriticity' => _n('Business criticity', 'Business criticities',
-                                          Session::getPluralNumber())
-
+                 'DocumentCategory' => null,
+                 'DocumentType' => null,
+                 'BusinessCriticity' => null
              ],
 
              __('Tools') => [
-                 'KnowbaseItemCategory' => _n('Knowledge base category',
-                                              'Knowledge base categories',
-                                              Session::getPluralNumber())
+                 'KnowbaseItemCategory' => null
              ],
 
-             __('Calendar') => [
-                 'Calendar' => _n('Calendar', 'Calendars',
-                                  Session::getPluralNumber()),
-                 'Holiday'  => _n('Close time', 'Close times',
-                                  Session::getPluralNumber())
+             _n('Calendar', 'Calendars', 1) => [
+                 'Calendar' => null,
+                 'Holiday' => null
              ],
 
-             _n('Operating system', 'Operating systems', Session::getPluralNumber()) => [
-                 'OperatingSystem'    => _n('Operating system',
-                                            'Operating systems',
-                                            Session::getPluralNumber()),
-                 'OperatingSystemVersion'
-                                      => _n('Version',
-                                            'Versions',
-                                            Session::getPluralNumber()),
-                 'OperatingSystemServicePack'
-                                      => _n('Service pack', 'Service packs',
-                                            Session::getPluralNumber()),
-                 'OperatingSystemArchitecture'
-                                      => _n('Architecture',
-                                            'Architectures',
-                                            Session::getPluralNumber()),
-                 'OperatingSystemEdition'
-                                      => _n('Edition',
-                                            'Editions',
-                                             Session::getPluralNumber()),
-                 'OperatingSystemKernel'
-                                      => _n('Kernel',
-                                            'Kernels',
-                                            Session::getPluralNumber()),
-                 'OperatingSystemKernelVersion'
-                                      => _n('Kernel version',
-                                            'Kernel versions',
-                                            Session::getPluralNumber()),
-                 'AutoUpdateSystem'   => _n('Update source', 'Update sources',
-                                            Session::getPluralNumber())
+             OperatingSystem::getTypeName(Session::getPluralNumber()) => [
+                 'OperatingSystem' => null,
+                 'OperatingSystemVersion' => null,
+                 'OperatingSystemServicePack' => null,
+                 'OperatingSystemArchitecture' => null,
+                 'OperatingSystemEdition' => null,
+                 'OperatingSystemKernel' => null,
+                 'OperatingSystemKernelVersion' => null,
+                 'AutoUpdateSystem' => null
              ],
 
              __('Networking') => [
-                 'NetworkInterface'         => _n('Network interface',
-                                                  'Network interfaces',
-                                                  Session::getPluralNumber()),
-                 'Netpoint'                 => _n('Network outlet', 'Network outlets',
-                                                  Session::getPluralNumber()),
-                 'Network'                  => _n('Network', 'Networks',
-                                                  Session::getPluralNumber()),
-                 'Vlan'                     => __('VLAN'),
-                 'LineOperator'             => _n('Line operator', 'Line operators',
-                                                  Session::getPluralNumber()),
-                 'DomainType'               => DomainType::getTypeName(Session::getPluralNumber()),
-                 'DomainRelation'           => DomainRelation::getTypeName(Session::getPluralNumber()),
-                 'DomainRecordType'         => DomainRecordType::getTypeName(Session::getPluralNumber())
+                 'NetworkInterface' => null,
+                 'Netpoint' => null,
+                 'Network' => null,
+                 'Vlan' => null,
+                 'LineOperator' => null,
+                 'DomainType' => null,
+                 'DomainRelation' => null,
+                 'DomainRecordType' => null
              ],
 
              __('Internet') => [
-                 'IPNetwork'    => _n('IP network', 'IP networks',
-                                      Session::getPluralNumber()),
-                 'FQDN'         => _n('Internet domain', 'Internet domains',
-                                      Session::getPluralNumber()),
-                 'WifiNetwork'  => _n('Wifi network', 'Wifi networks',
-                                      Session::getPluralNumber()),
-                 'NetworkName'  => _n('Network name', 'Network names',
-                                      Session::getPluralNumber())
+                 'IPNetwork' => null,
+                 'FQDN' => null,
+                 'WifiNetwork' => null,
+                 'NetworkName' => null
              ],
 
              _n('Software', 'Software', 1) => [
-                 'SoftwareCategory' => _n('Software category',
-                                          'Software categories',
-                                          Session::getPluralNumber())
+                'SoftwareCategory' => null
              ],
 
-             __('User') => [
-                 'UserTitle'     => _n('User title', 'Users titles',
-                                       Session::getPluralNumber()),
-                 'UserCategory'  => _n('User category', 'User categories',
-                                       Session::getPluralNumber())
+             User::getTypeName(1) => [
+                 'UserTitle' => null,
+                 'UserCategory' => null
              ],
 
              __('Authorizations assignment rules') => [
-                 'RuleRightParameter' => _n('LDAP criterion', 'LDAP criteria',
-                                            Session::getPluralNumber())
+                'RuleRightParameter' => null
              ],
 
              __('Fields unicity') => [
-                 'Fieldblacklist' => _n('Ignored value for the unicity',
-                                        'Ignored values for the unicity',
-                                        Session::getPluralNumber())
+                'Fieldblacklist' => null
              ],
 
              __('External authentications') => [
-                 'SsoVariable' => _n('Field storage of the login in the HTTP request',
-                                     'Fields storage of the login in the HTTP request',
-                                     Session::getPluralNumber())
+                'SsoVariable' => null
              ],
              __('Power management') => [
-               'Plug'=> Plug::getTypeName(Session::getPluralNumber())
+               'Plug' => null
              ],
              __('Appliances') => [
-                'ApplianceType'  => ApplianceType::getTypeName(Session::getPluralNumber()),
-                'ApplianceEnvironment' => ApplianceEnvironment::getTypeName(Session::getPluralNumber())
-             ],
+               'ApplianceType' => null,
+               'ApplianceEnvironment' => null
+             ]
 
          ]; //end $opt
 
@@ -1114,12 +993,13 @@ class Dropdown {
             $optgroup = array_merge($optgroup, $plugdrop);
          }
 
-         foreach ($optgroup as $label=>$dp) {
-            foreach ($dp as $key => $val) {
-
+         foreach ($optgroup as $label => &$dp) {
+            foreach ($dp as $key => &$val) {
                if ($tmp = getItemForItemtype($key)) {
                   if (!$tmp->canView()) {
                      unset($optgroup[$label][$key]);
+                  } else if ($val === null) {
+                     $val = $key::getTypeName(Session::getPluralNumber());
                   }
                } else {
                   unset($optgroup[$label][$key]);
@@ -1388,6 +1268,7 @@ class Dropdown {
       $params['display_emptychoice'] = true;
       $params['checkright']          = false;
       $params['toupdate']            = '';
+      $params['display']             = true;
 
       if (is_array($options) && count($options)) {
          foreach ($options as $key => $val) {
@@ -1411,12 +1292,15 @@ class Dropdown {
       asort($options);
 
       if (count($options)) {
-         return Dropdown::showFromArray($params['name'], $options,
-                                        ['value'               => $params['value'],
-                                              'on_change'           => $params['on_change'],
-                                              'toupdate'            => $params['toupdate'],
-                                              'display_emptychoice' => $params['display_emptychoice'],
-                                              'emptylabel'          => $params['emptylabel']]);
+         return Dropdown::showFromArray($params['name'], $options, [
+            'value'               => $params['value'],
+            'on_change'           => $params['on_change'],
+            'toupdate'            => $params['toupdate'],
+            'display_emptychoice' => $params['display_emptychoice'],
+            'emptylabel'          => $params['emptylabel'],
+            'display'             => $params['display'],
+            'rand'                => $params['rand'],
+         ]);
       }
       return 0;
    }
@@ -1441,6 +1325,7 @@ class Dropdown {
     *                            treatment. For instance, select a Item_Device* for CommonDevice
     *    - emptylabel          : Empty choice's label (default self::EMPTY_VALUE)
     *    - used                : array / Already used items ID: not to display in dropdown (default empty)
+    *    - display             : true : display directly, false return the html
     *
     * @return integer randomized value used to generate HTML IDs
    **/
@@ -1458,6 +1343,8 @@ class Dropdown {
       $params['showItemSpecificity'] = '';
       $params['emptylabel']          = self::EMPTY_VALUE;
       $params['used']                = [];
+      $params['display']             = true;
+      $params['rand']                = mt_rand();
 
       if (is_array($options) && count($options)) {
          foreach ($options as $key => $val) {
@@ -1465,46 +1352,76 @@ class Dropdown {
          }
       }
 
-      $rand = self::showItemType($params['itemtypes'],
-                                 ['checkright' => $params['checkright'],
-                                       'name'       => $params['itemtype_name'],
-                                       'emptylabel' => $params['emptylabel']]);
+      $select = self::showItemType($params['itemtypes'], [
+         'checkright' => $params['checkright'],
+         'name'       => $params['itemtype_name'],
+         'emptylabel' => $params['emptylabel'],
+         'display'    => $params['display'],
+         'rand'       => $params['rand'],
+      ]);
 
-      if ($rand) {
-         $p = ['idtable'             => '__VALUE__',
-                    'name'                => $params['items_id_name'],
-                    'entity_restrict'     => $params['entity_restrict'],
-                    'showItemSpecificity' => $params['showItemSpecificity']];
+      $p_ajax = [
+         'idtable'             => '__VALUE__',
+         'name'                => $params['items_id_name'],
+         'entity_restrict'     => $params['entity_restrict'],
+         'showItemSpecificity' => $params['showItemSpecificity'],
+         'rand'                => $params['rand']
+      ];
 
-         // manage condition
-         if ($params['onlyglobal']) {
-            $p['condition'] = static::addNewCondition(['is_global' => 1]);
-         }
-         if ($params['used']) {
-            $p['used'] = $params['used'];
-         }
+      // manage condition
+      if ($params['onlyglobal']) {
+         $p_ajax['condition'] = static::addNewCondition(['is_global' => 1]);
+      }
+      if ($params['used']) {
+         $p_ajax['used'] = $params['used'];
+      }
 
-         $field_id = Html::cleanId("dropdown_".$params['itemtype_name'].$rand);
-         $show_id  = Html::cleanId("show_".$params['items_id_name'].$rand);
+      $field_id = Html::cleanId("dropdown_".$params['itemtype_name'].$params['rand']);
+      $show_id  = Html::cleanId("show_".$params['items_id_name'].$params['rand']);
 
-         Ajax::updateItemOnSelectEvent($field_id, $show_id,
-                                       $CFG_GLPI["root_doc"]."/ajax/dropdownAllItems.php", $p);
+      $ajax = Ajax::updateItemOnSelectEvent(
+         $field_id,
+         $show_id,
+         $CFG_GLPI["root_doc"]."/ajax/dropdownAllItems.php",
+         $p_ajax,
+         $params['display']
+      );
 
-         echo "<br><span id='$show_id'>&nbsp;</span>\n";
+      $out = "";
+      if (!$params['display']) {
+         $out.= $select.$ajax;
+      }
 
-         // We check $options as the caller will set $options['default_itemtype'] only if it needs a
-         // default itemtype and the default value can be '' thus empty won't be valid !
-         if (array_key_exists ('default_itemtype', $options)) {
-            echo "<script type='text/javascript' >\n";
-            echo "$(function() {";
-            echo Html::jsSetDropdownValue($field_id, $params['default_itemtype']);
-            echo "});</script>\n";
+      $out.= "<br><span id='$show_id'>&nbsp;</span>\n";
 
-            $p["idtable"] = $params['default_itemtype'];
-            Ajax::updateItem($show_id, $CFG_GLPI["root_doc"]. "/ajax/dropdownAllItems.php", $p);
+      // We check $options as the caller will set $options['default_itemtype'] only if it needs a
+      // default itemtype and the default value can be '' thus empty won't be valid !
+      if (array_key_exists ('default_itemtype', $options)) {
+         $out.= "<script type='text/javascript' >\n";
+         $out.= "$(function() {";
+         $out.= Html::jsSetDropdownValue($field_id, $params['default_itemtype']);
+         $out.= "});</script>\n";
+
+         $p_ajax["idtable"] = $params['default_itemtype'];
+         $ajax2 = Ajax::updateItem(
+            $show_id,
+            $CFG_GLPI["root_doc"]. "/ajax/dropdownAllItems.php",
+            $p_ajax,
+            "",
+            $params['display']
+         );
+
+         if (!$params['display']) {
+            $out.= $ajax2;
          }
       }
-      return $rand;
+
+      if ($params['display']) {
+         echo $out;
+         return $params['rand'];
+      }
+
+      return $out;
    }
 
 
@@ -1700,7 +1617,8 @@ class Dropdown {
       if (($params['value'] < max($params['min'], 10*MINUTE_TIMESTAMP))
           && $params['addfirstminutes']) {
          $params['value'] = floor(($params['value'])/MINUTE_TIMESTAMP)*MINUTE_TIMESTAMP;
-      } else {
+      } else if (!in_array($params['value'], $params['toadd'])) {
+         // Round to a valid step except if value is already valid (defined in values to add)
          $params['value'] = floor(($params['value'])/$params['step'])*$params['step'];
       }
 
@@ -1711,7 +1629,8 @@ class Dropdown {
       }
 
       if ($params['addfirstminutes']) {
-         for ($i=MINUTE_TIMESTAMP; $i<max($params['min'], 10*MINUTE_TIMESTAMP); $i+=MINUTE_TIMESTAMP) {
+         $max = max($params['min'], 10*MINUTE_TIMESTAMP);
+         for ($i=MINUTE_TIMESTAMP; $i < $max; $i+=MINUTE_TIMESTAMP) {
             $values[$i] = '';
          }
       }
@@ -1974,7 +1893,7 @@ class Dropdown {
                      if ($optgroup_tooltips && isset($optgroup_tooltips[$key2])) {
                         $output .= ' title="'.$optgroup_tooltips[$key2].'"';
                      }
-                     $output .= ">" .  $val2 . "</option>";
+                     $output .= ">" .  Html::entities_deep($val2) . "</option>";
                      if ($max_option_size < strlen($val2)) {
                         $max_option_size = strlen($val2);
                      }
@@ -1994,7 +1913,7 @@ class Dropdown {
                   if (isset($param['option_tooltips'][$key])) {
                      $output .= ' title="'.$param['option_tooltips'][$key].'"';
                   }
-                  $output .= ">" .$val . "</option>";
+                  $output .= ">" .Html::entities_deep($val) . "</option>";
                   if ($max_option_size < strlen($val)) {
                      $max_option_size = strlen($val);
                   }
@@ -2210,7 +2129,7 @@ class Dropdown {
     *
     * @since 0.83
     *
-    * @param $onchange  String   optional, for ajax (default '')
+    * @param string $onchange  Optional, for ajax (default '')
    **/
    static function showListLimit($onchange = '', $display = true) {
       global $CFG_GLPI;
@@ -2265,6 +2184,11 @@ class Dropdown {
    public static function getDropdownValue($post, $json = true) {
       global $DB, $CFG_GLPI;
 
+      // check if asked itemtype is the one originaly requested by the form
+      if (!Session::validateIDOR($post)) {
+         return;
+      }
+
       if (isset($post["entity_restrict"])
          && !is_array($post["entity_restrict"])
          && (substr($post["entity_restrict"], 0, 1) === '[')
@@ -2286,6 +2210,7 @@ class Dropdown {
       if (!($item = getItemForItemtype($post['itemtype']))) {
          return;
       }
+
       $table = $item->getTable();
       $datas = [];
 
@@ -2377,6 +2302,11 @@ class Dropdown {
                ];
                if (Session::haveTranslations($post['itemtype'], 'completename')) {
                   $swhere["namet.value"] = ['LIKE', $search];
+               }
+
+               if ($_SESSION['glpiis_ids_visible']
+                   && is_numeric($post['searchText']) && (int)$post['searchText'] == $post['searchText']) {
+                  $swhere[$table . '.' . $item->getIndexName()] = ['LIKE', "%{$post['searchText']}%"];
                }
 
                // search also in displaywith columns
@@ -2515,16 +2445,20 @@ class Dropdown {
          // Empty search text : display first
          if ($post['page'] == 1 && empty($post['searchText'])) {
             if ($post['display_emptychoice']) {
-               array_push($datas, ['id'   => 0,
-                                 'text' => $post['emptylabel']]);
+               $datas[] = [
+                  'id' => 0,
+                  'text' => $post['emptylabel']
+               ];
             }
          }
 
          if ($post['page'] == 1) {
             if (count($toadd)) {
                foreach ($toadd as $key => $val) {
-                  array_push($datas, ['id'   => $key,
-                                    'text' => stripslashes($val)]);
+                  $datas[] = [
+                     'id' => $key,
+                     'text' => stripslashes($val)
+                  ];
                }
             }
          }
@@ -2553,10 +2487,10 @@ class Dropdown {
                   if (!$firstitem) {
                      if ($prev >= 0) {
                         if (count($datastoadd)) {
-                           array_push($datas,
-                                    ['text'     => Dropdown::getDropdownName("glpi_entities",
-                                                                                    $prev),
-                                          'children' => $datastoadd]);
+                           $datas[] = [
+                              'text' => Dropdown::getDropdownName("glpi_entities", $prev),
+                              'children' => $datastoadd
+                           ];
                         }
                      }
                   }
@@ -2632,7 +2566,7 @@ class Dropdown {
                                     || ($last_level_displayed[$work_level] != $work_parentID)));
                         // Add parents
                         foreach ($parent_datas as $val) {
-                           array_push($datastoadd, $val);
+                           $datastoadd[] = $val;
                         }
                      }
                   }
@@ -2662,11 +2596,13 @@ class Dropdown {
                      }
                      $title = sprintf(__('%1$s - %2$s'), $title, $addcomment);
                   }
-                  array_push($datastoadd, ['id'             => $ID,
-                                             'text'           => $outputval,
-                                             'level'          => (int)$level,
-                                             'title'          => $title,
-                                             'selection_text' => $selection_text]);
+                  $datastoadd[] = [
+                     'id' => $ID,
+                     'text' => $outputval,
+                     'level' => (int)$level,
+                     'title' => $title,
+                     'selection_text' => $selection_text
+                  ];
                   $count++;
                }
                $firstitem = false;
@@ -2679,8 +2615,10 @@ class Dropdown {
                if ($prev == $firstitem_entity) {
                   $datas = array_merge($datas, $datastoadd);
                } else {
-                  array_push($datas, ['text'     => Dropdown::getDropdownName("glpi_entities", $prev),
-                                          'children' => $datastoadd]);
+                  $datas[] = [
+                     'text' => Dropdown::getDropdownName("glpi_entities", $prev),
+                     'children' => $datastoadd
+                  ];
                }
             }
          } else {
@@ -2730,6 +2668,15 @@ class Dropdown {
          if (!empty($post['searchText'])) {
             $search = Search::makeTextSearchValue($post['searchText']);
             $orwhere = ["$table.$field" => ['LIKE', $search]];
+
+            if ($_SESSION['glpiis_ids_visible']
+                && is_numeric($post['searchText']) && (int)$post['searchText'] == $post['searchText']) {
+               $orwhere[$table . '.' . $item->getIndexName()] = ['LIKE', "%{$post['searchText']}%"];
+            }
+
+            if ($item instanceof CommonDCModelDropdown) {
+               $orwhere[$table . '.product_number'] = ['LIKE', $search];
+            }
 
             if (Session::haveTranslations($post['itemtype'], $field)) {
                $orwhere['namet.value'] = ['LIKE', $search];
@@ -2893,15 +2840,19 @@ class Dropdown {
          // Display first if no search
          if ($post['page'] == 1 && empty($post['searchText'])) {
             if (!isset($post['display_emptychoice']) || $post['display_emptychoice']) {
-               array_push($datas, ['id'    => 0,
-                                 'text'  => $post["emptylabel"]]);
+               $datas[] = [
+                  'id' => 0,
+                  'text' => $post["emptylabel"]
+               ];
             }
          }
          if ($post['page'] == 1) {
             if (count($toadd)) {
                foreach ($toadd as $key => $val) {
-                  array_push($datas, ['id'    => $key,
-                                    'text'  => stripslashes($val)]);
+                  $datas[] = [
+                     'id' => $key,
+                     'text' => stripslashes($val)
+                  ];
                }
             }
          }
@@ -2916,10 +2867,10 @@ class Dropdown {
                   && ($data["entities_id"] != $prev)) {
                   if ($prev >= 0) {
                      if (count($datastoadd)) {
-                        array_push($datas,
-                                 ['text'     => Dropdown::getDropdownName("glpi_entities",
-                                                                                 $prev),
-                                       'children' => $datastoadd]);
+                        $datas[] = [
+                           'text' => Dropdown::getDropdownName("glpi_entities", $prev),
+                           'children' => $datastoadd
+                        ];
                      }
                   }
                   $prev       = $data["entities_id"];
@@ -2935,6 +2886,8 @@ class Dropdown {
                   } else {
                      $outputval = $tmpitem->getTypeName();
                   }
+               } else if ($item instanceof CommonDCModelDropdown) {
+                  $outputval =sprintf(__('%1$s - %2$s'), $data[$field], $data['product_number']);
                } else {
                   $outputval = $data[$field];
                }
@@ -2970,16 +2923,19 @@ class Dropdown {
                      }
                   }
                }
-               array_push($datastoadd, ['id'    => $ID,
-                                             'text'  => $outputval,
-                                             'title' => $title]);
+               $datastoadd[] = [
+                  'id' => $ID,
+                  'text' => $outputval,
+                  'title' => $title
+               ];
                $count++;
             }
             if ($multi) {
                if (count($datastoadd)) {
-                  array_push($datas, ['text'     => Dropdown::getDropdownName("glpi_entities",
-                                                                                 $prev),
-                                          'children' => $datastoadd]);
+                  $datas[] = [
+                     'text' => Dropdown::getDropdownName("glpi_entities", $prev),
+                     'children' => $datastoadd
+                  ];
                }
             } else {
                if (count($datastoadd)) {
@@ -3005,6 +2961,11 @@ class Dropdown {
     */
    public static function getDropdownConnect($post, $json = true) {
       global $DB, $CFG_GLPI;
+
+      // check if asked itemtype is the one originaly requested by the form
+      if (!Session::validateIDOR($post)) {
+         return;
+      }
 
       if (!isset($post['fromtype']) || !($fromitem = getItemForItemtype($post['fromtype']))) {
          return;
@@ -3132,12 +3093,10 @@ class Dropdown {
       $results = [];
       // Display first if no search
       if (empty($post['searchText'])) {
-         array_push(
-            $results, [
-               'id'   => 0,
-               'text' => Dropdown::EMPTY_VALUE
-            ]
-         );
+         $results[] = [
+            'id' => 0,
+            'text' => Dropdown::EMPTY_VALUE
+         ];
       }
       if (count($iterator)) {
          $prev       = -1;
@@ -3146,12 +3105,10 @@ class Dropdown {
          while ($data = $iterator->next()) {
             if ($multi && ($data["entities_id"] != $prev)) {
                if (count($datatoadd)) {
-                  array_push(
-                     $results, [
-                        'text'      => Dropdown::getDropdownName("glpi_entities", $prev),
-                        'children'  => $datatoadd
-                     ]
-                  );
+                  $results[] = [
+                     'text' => Dropdown::getDropdownName("glpi_entities", $prev),
+                     'children' => $datatoadd
+                  ];
                }
                $prev = $data["entities_id"];
                // Reset last level displayed :
@@ -3170,18 +3127,18 @@ class Dropdown {
             if (!empty($data['otherserial'])) {
                $output = sprintf(__('%1$s - %2$s'), $output, $data["otherserial"]);
             }
-            array_push($datatoadd, ['id'    => $ID,
-                                          'text'  => $output]);
+            $datatoadd[] = [
+               'id' => $ID,
+               'text' => $output
+            ];
          }
 
          if ($multi) {
             if (count($datatoadd)) {
-               array_push(
-                  $results, [
-                     'text'      => Dropdown::getDropdownName("glpi_entities", $prev),
-                     'children'  => $datatoadd
-                  ]
-               );
+               $results[] = [
+                  'text' => Dropdown::getDropdownName("glpi_entities", $prev),
+                  'children' => $datatoadd
+               ];
             }
          } else {
             if (count($datatoadd)) {
@@ -3211,6 +3168,11 @@ class Dropdown {
       }
 
       $itemtypeisplugin = isPluginItemType($post['itemtype']);
+
+      // check if asked itemtype is the one originaly requested by the form
+      if (!Session::validateIDOR($post)) {
+         return;
+      }
 
       if (!$item = getItemForItemtype($post['itemtype'])) {
          return;
@@ -3285,7 +3247,7 @@ class Dropdown {
       $iterator = $DB->request([
          'FROM'   => $post['table'],
          'WHERE'  => $where,
-         'ORDER'  => 'name',
+         'ORDER'  => $item->getNameField(),
          'LIMIT'  => $limit,
          'START'  => $start
       ]);
@@ -3294,13 +3256,15 @@ class Dropdown {
 
       // Display first if no search
       if ($post['page'] == 1 && empty($post['searchText'])) {
-         array_push($results, ['id'   => 0,
-                                 'text' => Dropdown::EMPTY_VALUE]);
+         $results[] = [
+            'id' => 0,
+            'text' => Dropdown::EMPTY_VALUE
+         ];
       }
       $count = 0;
       if (count($iterator)) {
          while ($data = $iterator->next()) {
-            $output = $data['name'];
+            $output = $data[$item->getNameField()];
 
             if (isset($data['contact']) && !empty($data['contact'])) {
                $output = sprintf(__('%1$s - %2$s'), $output, $data['contact']);
@@ -3317,12 +3281,10 @@ class Dropdown {
                $output = sprintf(__('%1$s (%2$s)'), $output, $data['id']);
             }
 
-            array_push(
-               $results, [
-                  'id'   => $data['id'],
-                  'text' => $output
-               ]
-            );
+            $results[] = [
+               'id' => $data['id'],
+               'text' => $output
+            ];
             $count++;
          }
       }
@@ -3440,12 +3402,10 @@ class Dropdown {
       // Display first if no search
       if (empty($post['searchText'])) {
          if ($post['page'] == 1) {
-            array_push(
-               $results, [
-                  'id'   => 0,
-                  'text' => Dropdown::EMPTY_VALUE
-               ]
-            );
+            $results[] = [
+               'id' => 0,
+               'text' => Dropdown::EMPTY_VALUE
+            ];
          }
       }
 
@@ -3465,13 +3425,11 @@ class Dropdown {
                $output = sprintf(__('%1$s (%2$s)'), $output, $loc);
             }
 
-            array_push(
-               $results, [
-                  'id'    => $ID,
-                  'text'  => $output,
-                  'title' => $title
-               ]
-            );
+            $results[] = [
+               'id' => $ID,
+               'text' => $output,
+               'title' => $title
+            ];
             $count++;
          }
       }
@@ -3521,8 +3479,8 @@ class Dropdown {
       if ($post['page'] == 1) {
          if (count($toadd)) {
             foreach ($toadd as $key => $val) {
-               array_push($data, ['id'   => $key,
-                                 'text' => strval(stripslashes($val))]);
+               $data[] = ['id' => $key,
+                  'text' => (string)stripslashes($val)];
             }
          }
       }
@@ -3558,8 +3516,8 @@ class Dropdown {
             if (isset($post['unit'])) {
                $txt = Dropdown::getValueWithUnit($i, $post['unit']);
             }
-            array_push($data, ['id'   => $i,
-                              'text' => strval($txt)]);
+            $data[] = ['id' => $i,
+               'text' => (string)$txt];
             $count++;
          }
 
@@ -3575,8 +3533,10 @@ class Dropdown {
             if (isset($post['unit'])) {
                $txt = Dropdown::getValueWithUnit($value, $post['unit']);
             }
-            array_push($data, ['id'   => $value,
-                              'text' => strval(stripslashes($txt))]);
+            $data[] = [
+               'id' => $value,
+               'text' => (string)stripslashes($txt)
+            ];
             $count++;
          }
       }
@@ -3597,6 +3557,11 @@ class Dropdown {
     */
    public static function getDropdownUsers($post, $json = true) {
       global $CFG_GLPI;
+
+      // check if asked itemtype is the one originaly requested by the form
+      if (!Session::validateIDOR($post + ['itemtype' => 'User', 'right' => ($post['right'] ?? "")])) {
+         return;
+      }
 
       if (!isset($post['right'])) {
          $post['right'] = "all";
@@ -3659,19 +3624,15 @@ class Dropdown {
       // Display first if empty search
       if ($post['page'] == 1 && empty($post['searchText'])) {
          if ($post['all'] == 0) {
-            array_push(
-               $results, [
-                  'id'   => 0,
-                  'text' => Dropdown::EMPTY_VALUE
-               ]
-            );
+            $results[] = [
+               'id' => 0,
+               'text' => Dropdown::EMPTY_VALUE
+            ];
          } else if ($post['all'] == 1) {
-            array_push(
-               $results, [
-                  'id'   => 0,
-                  'text' => __('All')
-               ]
-            );
+            $results[] = [
+               'id' => 0,
+               'text' => __('All')
+            ];
          }
       }
 
@@ -3679,13 +3640,11 @@ class Dropdown {
          foreach ($users as $ID => $output) {
             $title = sprintf(__('%1$s - %2$s'), $output, $logins[$ID]);
 
-            array_push(
-               $results, [
-                  'id'    => $ID,
-                  'text'  => $output,
-                  'title' => $title
-               ]
-            );
+            $results[] = [
+               'id' => $ID,
+               'text' => $output,
+               'title' => $title
+            ];
             $count++;
          }
       }

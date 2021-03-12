@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -34,6 +34,8 @@ namespace Glpi;
 
 use \Ajax;
 use \CommonDBTM;
+use CronTask;
+use Document;
 use \Html;
 use \Session;
 use \Toolbox;
@@ -157,12 +159,12 @@ class Event extends CommonDBTM {
                           'planning'     => __('Planning'),
                           'tools'        => __('Tools'),
                           'financial'    => __('Management'),
-                          'login'        => __('Connection'),
+                          'login'        => _n('Connection', 'Connections', 1),
                           'setup'        => __('Setup'),
                           'security'     => __('Security'),
                           'reservation'  => _n('Reservation', 'Reservations', Session::getPluralNumber()),
-                          'cron'         => _n('Automatic action', 'Automatic actions', Session::getPluralNumber()),
-                          'document'     => _n('Document', 'Documents', Session::getPluralNumber()),
+                          'cron'         => CronTask::getTypeName(Session::getPluralNumber()),
+                          'document'     => Document::getTypeName(Session::getPluralNumber()),
                           'notification' => _n('Notification', 'Notifications', Session::getPluralNumber()),
                           'plugin'       => _n('Plugin', 'Plugins', Session::getPluralNumber())];
 
@@ -269,10 +271,11 @@ class Event extends CommonDBTM {
              sprintf(__('Last %d events'), $_SESSION['glpilist_limit'])."</a>";
       echo "</th></tr>";
 
-      echo "<tr><th colspan='2'>".__('Source')."</th>";
-      echo "<th>".__('Date')."</th>";
-      echo "<th width='8%'>".__('Service')."</th>";
-      echo "<th width='60%'>".__('Message')."</th></tr>";
+      echo "<tr><th>".__('Source')."</th>";
+      echo "<th>".__('Id')."</th>";
+      echo "<th>"._n('Date', 'Dates', 1)."</th>";
+      echo "<th width='10%'>".__('Service')."</th>";
+      echo "<th width='50%'>".__('Message')."</th></tr>";
 
       while ($data = $iterator->next()) {
          $ID       = $data['id'];
@@ -293,10 +296,10 @@ class Event extends CommonDBTM {
          }
 
          echo "<tr class='tab_bg_2'><td>".$itemtype."</td>";
-         echo "<td class='center'>";
+         echo "<td>";
          self::displayItemLogID($type, $items_id);
-         echo "</td><td class='center'>".Html::convDateTime($date)."</td>";
-         echo "<td class='center'>".(isset($logService[$service])?$logService[$service]:'');
+         echo "</td><td>".Html::convDateTime($date)."</td>";
+         echo "<td>".(isset($logService[$service])?$logService[$service]:'');
          echo "</td><td>".$message."</td></tr>";
 
          $i++;
@@ -325,7 +328,7 @@ class Event extends CommonDBTM {
       // Columns of the Table
       $items = ["type"     => [__('Source'), ""],
                      "items_id" => [__('ID'), ""],
-                     "date"     => [__('Date'), ""],
+                     "date"     => [_n('Date', 'Dates', 1), ""],
                      "service"  => [__('Service'), "width='8%'"],
                      "level"    => [__('Level'), "width='8%'"],
                      "message"  => [__('Message'), "width='50%'"]];

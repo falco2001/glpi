@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -97,7 +97,7 @@ function loadDataset() {
    // Unit test data definition
    $data = [
       // bump this version to force reload of the full dataset, when content change
-      '_version' => '4.4',
+      '_version' => '4.6',
 
       // Type => array of entries
       'Entity' => [
@@ -143,6 +143,14 @@ function loadDataset() {
             'name'        => '_test_pc22',
             'entities_id' => '_test_child_2',
          ]
+      ], 'ComputerModel' => [
+         [
+            'name'           => '_test_computermodel_1',
+            'product_number' => 'CMP_ADEAF5E1',
+         ], [
+            'name'           => '_test_computermodel_2',
+            'product_number' => 'CMP_567AEC68',
+         ],
       ], 'Software' => [
          [
             'name'         => '_test_soft',
@@ -195,7 +203,7 @@ function loadDataset() {
             'password2'     => TU_PASS,
             'entities_id'   => '_test_root_entity',
             'profiles_id'   => 4, // TODO manage test profiles
-            '_entities_id'  => '_test_root_entity',
+            '_entities_id'  => 0,
             '_profiles_id'  => 4,
             '_is_recursive' => 1,
          ]
@@ -317,7 +325,21 @@ function loadDataset() {
             'content'        => 'Content for ticket _ticket03',
             'users_id_recipient' => TU_USER,
             'entities_id'    => '_test_child_1'
-         ]
+         ],
+         [
+            'id'             => 100, // Force ID that will be used in imap test suite fixtures
+            'name'           => '_ticket100',
+            'content'        => 'Content for ticket _ticket100',
+            'users_id_recipient' => TU_USER,
+            'entities_id'    => '_test_root_entity'
+         ],
+         [
+            'id'             => 101, // Force ID that will be used in imap test suite fixtures
+            'name'           => '_ticket101',
+            'content'        => 'Content for ticket _ticket101',
+            'users_id_recipient' => TU_USER,
+            'entities_id'    => '_test_root_entity'
+         ],
       ], 'TicketTask' => [
          [
             'tickets_id'         => '_ticket01',
@@ -581,6 +603,7 @@ function loadDataset() {
    ];
 
    // To bypass various right checks
+   $session_bak = $_SESSION;
    $_SESSION['glpishowallentities'] = 1;
    $_SESSION['glpicronuserrunning'] = "cron_phpunit";
    $_SESSION['glpi_use_mode']       = Session::NORMAL_MODE;
@@ -591,11 +614,13 @@ function loadDataset() {
 
    $DB->beginTransaction();
 
-   // need to set theses in DB, because tests for API use http call and this bootstrap file is not called
    Config::setConfigurationValues('core', ['url_base'     => GLPI_URI,
                                            'url_base_api' => GLPI_URI . '/apirest.php']);
    $CFG_GLPI['url_base']      = GLPI_URI;
    $CFG_GLPI['url_base_api']  = GLPI_URI . '/apirest.php';
+
+   // make all caldav component available for tests (for default usage we don't VTODO)
+   $CFG_GLPI['caldav_supported_components']  = ['VEVENT', 'VJOURNAL', 'VTODO'];
 
    $conf = Config::getConfigurationValues('phpunit');
    if (isset($conf['dataset']) && $conf['dataset']==$data['_version']) {
@@ -651,6 +676,8 @@ function loadDataset() {
       Config::setConfigurationValues('phpunit', ['dataset' => $data['_version']]);
    }
    $DB->commit();
+
+   $_SESSION = $session_bak; // Unset force session variables
 }
 
 /**
@@ -659,7 +686,7 @@ function loadDataset() {
  * @param string  $type
  * @param string  $name
  * @param boolean $onlyid
- * @return CommonGLPI|false the item, or its id
+ * @return CommonDBTM|false the item, or its id
  */
 function getItemByTypeName($type, $name, $onlyid = false) {
 

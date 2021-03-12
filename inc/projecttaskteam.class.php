@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -101,6 +101,18 @@ class ProjectTaskTeam extends CommonDBRelation {
          case 'ProjectTask' :
             $item->showTeam($item);
             return true;
+      }
+   }
+
+   public function post_addItem() {
+      if (!isset($this->input['_disablenotif'])) {
+         // Read again to be sure that the data is up to date
+         $this->getFromDB($this->fields['id']);
+         // Get linked task
+         $task = new ProjectTask();
+         $task->getFromDB($this->fields['projecttasks_id']);
+         // Raise update event on task
+         NotificationEvent::raiseEvent("update", $task);
       }
    }
 

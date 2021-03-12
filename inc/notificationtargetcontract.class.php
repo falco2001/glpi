@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -158,8 +158,8 @@ class NotificationTargetContract extends NotificationTarget {
                     'contract.number'       => _x('phone', 'Number'),
                     'contract.items.number' => _x('quantity', 'Number of items'),
                     'contract.items'        => __('Device list'),
-                    'contract.type'         => __('Type'),
-                    'contract.entity'       => __('Entity'),
+                    'contract.type'         => _n('Type', 'Types', 1),
+                    'contract.entity'       => Entity::getTypeName(1),
                     'contract.states'       => __('Status'),
                     'contract.time'         => sprintf(__('%1$s / %2$s'),
                                                   __('Contract expired since the'),

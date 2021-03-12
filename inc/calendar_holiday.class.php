@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -78,7 +78,7 @@ class Calendar_Holiday extends CommonDBRelation {
       $rand    = mt_rand();
 
       $iterator = $DB->request([
-         'SELECT ' => [
+         'SELECT' => [
             'glpi_calendars_holidays.id AS linkid',
             'glpi_holidays.*'
          ],

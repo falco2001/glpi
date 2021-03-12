@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -524,7 +524,7 @@ $RELATION = [
       'glpi_problems'                    => 'entities_id',
       'glpi_profiles_reminders'          => 'entities_id',
       'glpi_profiles_rssfeeds'           => 'entities_id',
-      'glpi_profiles_users'              => 'entities_id',
+      '_glpi_profiles_users'             => 'entities_id',
       '_glpi_projectcosts'               => 'entities_id',
       'glpi_projects'                    => 'entities_id',
       '_glpi_projecttasks'               => 'entities_id',

@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -558,7 +558,7 @@ class Reminder extends CommonDBVisible implements
    function post_getEmpty() {
       $this->fields["name"]        = __('New note');
 
-      self::trait_post_getEmpty();
+      $this->trait_post_getEmpty();
    }
 
 
@@ -638,7 +638,7 @@ class Reminder extends CommonDBVisible implements
       echo "</td>\n";
       echo "</tr>\n";
 
-      echo "<tr class='tab_bg_2'><td>".__('Calendar')."</td>";
+      echo "<tr class='tab_bg_2'><td>"._n('Calendar', 'Calendars', 1)."</td>";
       $active_recall = ($ID && $this->fields["is_planned"] && PlanningRecall::isAvailable());
 
       echo "<td";
@@ -1061,7 +1061,7 @@ class Reminder extends CommonDBVisible implements
 
       $vcomp = $vcalendar->getBaseComponent();
 
-      $input = $this->getCommonInputFromVcomponent($vcomp);
+      $input = $this->getCommonInputFromVcomponent($vcomp, $this->isNewItem());
 
       $input['text'] = $input['content'];
       unset($input['content']);

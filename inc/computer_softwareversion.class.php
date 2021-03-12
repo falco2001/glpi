@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -35,7 +35,7 @@ if (!defined('GLPI_ROOT')) {
 }
 
 /**
- * @deprecated 9.5.0 Use Item_SoftwareLicense
+ * @deprecated 9.5.0 Use Item_SoftwareVersion
  */
 class Computer_SoftwareVersion extends Item_SoftwareVersion {
 

@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -37,6 +37,15 @@ if (!defined('GLPI_ROOT')) {
 }
 
 interface ProtocolInterface {
+
+   /**
+    * Do not validate SSL certificate
+    *
+    * @param  bool $novalidatecert Set to true to disable certificate validation
+    *
+    * @return self
+    */
+   public function setNoValidateCert(bool $novalidatecert);
 
    /**
     * Open connection to server.

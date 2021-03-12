@@ -1,4 +1,34 @@
 <?php
+/**
+ * ---------------------------------------------------------------------
+ * GLPI - Gestionnaire Libre de Parc Informatique
+ * Copyright (C) 2015-2021 Teclib' and contributors.
+ *
+ * http://glpi-project.org
+ *
+ * based on GLPI - Gestionnaire Libre de Parc Informatique
+ * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ *
+ * ---------------------------------------------------------------------
+ *
+ * LICENSE
+ *
+ * This file is part of GLPI.
+ *
+ * GLPI is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * GLPI is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * ---------------------------------------------------------------------
+ */
 
 if (!defined('GLPI_ROOT')) {
    die("Sorry. You can't access this file directly");
@@ -127,12 +157,14 @@ class Impact extends CommonGLPI {
 
          // Search for a valid linked item of this ITILObject
          $found = false;
-         foreach ($linked_items as $linked_item) {
-            $class = $linked_item['itemtype'];
+         foreach ($linked_items as $itemtype => $linked_item_ids) {
+            $class = $itemtype;
             if (self::isEnabled($class)) {
                $item = new $class;
-               $found = $item->getFromDB($linked_item['items_id']);
-               break;
+               foreach ($linked_item_ids as $linked_item_id) {
+                  $found = $item->getFromDB($linked_item_id);
+                  break 2;
+               }
             }
          }
 
@@ -268,16 +300,16 @@ class Impact extends CommonGLPI {
                echo '<td class="impact-left" width="15%">';
                echo '<div><a target="_blank" href="' .
                   $itemtype_item['stored']->getLinkURL() . '">' .
-                  $itemtype_item['stored']->fields[$itemtype_item['stored']::getNameField()] . '</a></div>';
+                  $itemtype_item['stored']->getFriendlyName() . '</a></div>';
                echo '</td>';
                echo '<td width="40%"><div>';
 
                $path = [];
                foreach ($itemtype_item['node']['path'] as $node) {
                   if ($node['id'] == $start_node_id) {
-                     $path[] = '<b>' . $node['name'] . '</b>';
+                     $path[] = '<b>' . $node['label'] . '</b>';
                   } else {
-                     $path[] = $node['name'];
+                     $path[] = $node['label'];
                   }
                }
                $separator = '<i class="fas fa-angle-right"></i>';
@@ -717,7 +749,7 @@ class Impact extends CommonGLPI {
       echo "<h2>" . __("Impact analysis") . "</h2>";
       echo "<div id='switchview'>";
       echo "<a id='sviewlist' href='#list'><i class='pointer fa fa-list-alt' title='".__('View as list')."'></i></a>";
-      echo "<a id='sviewgraph' href='#graph'><i class='pointer fa fa-project-diagram' title='".__('View graphical representation')."'></i></a>";
+      echo "<a id='sviewgraph' href='#graph'><i class='pointer fa fa-bezier-curve' title='".__('View graphical representation')."'></i></a>";
       echo "</div>";
       echo "</div>";
 
@@ -865,20 +897,21 @@ class Impact extends CommonGLPI {
       }
 
       // Search for items
-      $filter = strtolower($filter);
       $table = $itemtype::getTable();
-      $name = $itemtype::getNameField();
       $base_request = [
          'FROM'   => $table,
          'WHERE'  => [
-            'RAW' => [
-               'LOWER(' . DBmysql::quoteName("$table.$name") . ')' => ['LIKE', "%$filter%"]
-            ],
             'NOT' => [
                "$table.id" => $used
             ],
          ],
       ];
+
+      // Add friendly name search criteria
+      $base_request['WHERE'] = array_merge(
+         $base_request['WHERE'],
+         $itemtype::getFriendlyNameSearchCriteria($filter)
+      );
 
       if (is_subclass_of($itemtype, "ExtraVisibilityCriteria", true)) {
          $base_request = array_merge_recursive(
@@ -904,7 +937,7 @@ class Impact extends CommonGLPI {
       }
 
       $select = [
-         'SELECT' => ["$table.id", "$table.$name"],
+         'SELECT' => ["$table.id", $itemtype::getFriendlyNameFields()],
       ];
       $limit = [
          'START' => $page * 20,
@@ -1067,8 +1100,8 @@ class Impact extends CommonGLPI {
       echo '<li id="impact_redo" class="impact-disabled" title="' . __("Redo") .'"><i class="fas fa-fw fa-redo"></i></li>';
       echo '<li class="impact-separator"></li>';
       echo '<li id="add_node" title="' . __("Add asset") .'"><i class="fas fa-fw fa-plus"></i></li>';
-      echo '<li id="add_edge" title="' . __("Add relation") .'"><i class="fas fa-fw fa-pencil-alt"></i></li>';
-      echo '<li id="add_compound" title="' . __("Add group") .'"><i class="far fa-fw fa-square"></i></li>';
+      echo '<li id="add_edge" title="' . __("Add relation") .'"><i class="fas fa-fw fa-slash"></i></li>';
+      echo '<li id="add_compound" title="' . __("Add group") .'"><i class="far fa-fw fa-object-group"></i></li>';
       echo '<li id="delete_element" title="' . __("Delete element") .'"><i class="fas fa-fw fa-trash"></i></li>';
       echo '<li class="impact-separator"></li>';
       echo '<li id="export_graph" title="' . __("Download") .'"><i class="fas fa-fw fa-download"></i></li>';
@@ -1251,8 +1284,7 @@ class Impact extends CommonGLPI {
       // Define basic data of the new node
       $new_node = [
          'id'          => $key,
-         'label'       => $item->fields[$item::getNameField()],
-         'name'        => $item->fields[$item::getNameField()],
+         'label'       => $item->getFriendlyName(),
          'image'       => $CFG_GLPI['root_doc'] . "/$image_name",
          'ITILObjects' => $item->getITILTickets(true),
       ];
@@ -1610,68 +1642,6 @@ class Impact extends CommonGLPI {
       }
    }
 
-   /**
-    * Print the form for the global impact page
-    */
-   public static function printImpactForm() {
-      global $CFG_GLPI;
-      $rand = mt_rand();
-
-      echo "<form name=\"item\" action=\"{$_SERVER['PHP_SELF']}\" method=\"GET\">";
-
-      echo '<table class="tab_cadre_fixe" style="width:30%">';
-
-      // First row: header
-      echo "<tr>";
-      echo "<th colspan=\"2\">" . self::getTypeName() . "</th>";
-      echo "</tr>";
-
-      // Second row: itemtype field
-      echo "<tr>";
-      echo "<td width=\"40%\"> <label>" . __('Item type') . "</label> </td>";
-      echo "<td>";
-      Dropdown::showItemTypes(
-         'type',
-         self::getEnabledItemtypes(),
-         [
-            'value'        => null,
-            'width'        => '100%',
-            'emptylabel'   => Dropdown::EMPTY_VALUE,
-            'rand'         => $rand
-         ]
-      );
-      echo "</td>";
-      echo "</tr>";
-
-      // Third row: items_id field
-      echo "<tr>";
-      echo "<td> <label>" . __('Item') . "</label> </td>";
-      echo "<td>";
-      Ajax::updateItemOnSelectEvent("dropdown_type$rand", "form_results",
-         $CFG_GLPI["root_doc"] . "/ajax/dropdownTrackingDeviceType.php",
-         [
-            'itemtype'        => '__VALUE__',
-            'entity_restrict' => 0,
-            'multiple'        => 1,
-            'admin'           => 1,
-            'rand'            => $rand,
-            'myname'          => "id",
-         ]
-      );
-      echo "<span id='form_results'>\n";
-      echo "</span>\n";
-      echo "</td>";
-      echo "</tr>";
-
-      // Fourth row: submit
-      echo "<tr><td colspan=\"2\" style=\"text-align:center\">";
-      echo Html::submit(__("Show impact analysis"));
-      echo "</td></tr>";
-
-      echo "</table>";
-      echo "<br><br>";
-      Html::closeForm();
-   }
 
    /**
     * Clean impact records for a given item that has been purged form the db
@@ -1679,7 +1649,7 @@ class Impact extends CommonGLPI {
     * @param CommonDBTM $item The item being purged
     */
    public static function clean(\CommonDBTM $item) {
-      global $DB, $CFG_GLPI;
+      global $DB;
 
       // Skip if not a valid impact type
       if (!self::isEnabled($item::getType())) {

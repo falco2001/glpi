@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -68,12 +68,12 @@ class Document extends DbTestCase {
    /**
     * @dataProvider canApplyOnProvider
     */
-   public function testCanApplyOn($item, $expected) {
+   public function testCanApplyOn($item, $can) {
       $this
          ->given($this->newTestedInstance)
             ->then
                ->boolean($this->testedInstance->canApplyOn($item))
-               ->isIdenticalTo($expected);
+               ->isIdenticalTo($can);
    }
 
    public function testGetItemtypesThatCanHave() {
@@ -401,6 +401,7 @@ class Document extends DbTestCase {
             'documents_id' => $basicDocument->getID(),
             'items_id'     => $kbItem->getID(),
             'itemtype'     => \KnowbaseItem::class,
+            'users_id'     => getItemByTypeName('User', 'normal', true),
          ])
       )->isGreaterThan(0);
 
@@ -409,6 +410,7 @@ class Document extends DbTestCase {
             'documents_id' => $inlinedDocument->getID(),
             'items_id'     => $kbItem->getID(),
             'itemtype'     => \KnowbaseItem::class,
+            'users_id'     => getItemByTypeName('User', 'normal', true),
          ])
       )->isGreaterThan(0);
 
@@ -682,6 +684,9 @@ class Document extends DbTestCase {
    }
 
    public function testCronCleanorphans () {
+
+      $this->login(); // must be logged as Document_Item uses Session::getLoginUserID()
+
       $doc = new \Document();
 
       $did1 = (int)$doc->add([

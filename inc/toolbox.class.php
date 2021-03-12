@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -30,6 +30,7 @@
  * ---------------------------------------------------------------------
  */
 
+use Glpi\Console\Application;
 use Glpi\Event;
 use Glpi\Mail\Protocol\ProtocolInterface;
 use Glpi\System\RequirementsManager;
@@ -37,6 +38,7 @@ use Laminas\Mail\Storage\AbstractStorage;
 use Monolog\Logger;
 use Mexitek\PHPColors\Color;
 use Psr\Log\InvalidArgumentException;
+use Symfony\Component\Console\Output\OutputInterface;
 
 if (!defined('GLPI_ROOT')) {
    die("Sorry. You can't access this file directly");
@@ -250,7 +252,8 @@ class Toolbox {
       }
 
       $result = '';
-      for ($i=0; $i<strlen($string); $i++) {
+      $strlen = strlen($string);
+      for ($i=0; $i < $strlen; $i++) {
          $char    = substr($string, $i, 1);
          $keychar = substr($key, ($i % strlen($key))-1, 1);
          $char    = chr(ord($char)+ord($keychar));
@@ -284,16 +287,30 @@ class Toolbox {
       }
 
       $content = base64_decode($content);
+
       $nonce = mb_substr($content, 0, SODIUM_CRYPTO_AEAD_XCHACHA20POLY1305_IETF_NPUBBYTES, '8bit');
+      if (mb_strlen($nonce, '8bit') !== SODIUM_CRYPTO_AEAD_XCHACHA20POLY1305_IETF_NPUBBYTES) {
+         trigger_error(
+            'Unable to extract nonce from content. It may not have been crypted with sodium functions.',
+            E_USER_WARNING
+         );
+         return '';
+      }
+
       $ciphertext = mb_substr($content, SODIUM_CRYPTO_AEAD_XCHACHA20POLY1305_IETF_NPUBBYTES, null, '8bit');
+
       $plaintext = sodium_crypto_aead_xchacha20poly1305_ietf_decrypt(
          $ciphertext,
          $nonce,
          $nonce,
          $key
       );
-      if (!is_string($plaintext)) {
-         throw new \RuntimeException('Unable to decrypt content');
+      if ($plaintext === false) {
+         trigger_error(
+            'Unable to decrypt content. It may have been crypted with another key.',
+            E_USER_WARNING
+         );
+         return '';
       }
       return $plaintext;
    }
@@ -309,22 +326,13 @@ class Toolbox {
    static function decrypt($string, $key = null) {
       self::deprecated('Use sodiumDecrypt');
 
+      $glpikey = new GLPIKey();
+
       if ($key === null) {
-         $glpikey = new GLPIKey();
          $key = $glpikey->getLegacyKey();
       }
 
-      $result = '';
-      $string = base64_decode($string);
-
-      for ($i=0; $i<strlen($string); $i++) {
-         $char    = substr($string, $i, 1);
-         $keychar = substr($key, ($i % strlen($key))-1, 1);
-         $char    = chr(ord($char)-ord($keychar));
-         $result .= $char;
-      }
-
-      return Toolbox::unclean_cross_side_scripting_deep($result);
+      return $glpikey->decryptUsingLegacyKey($string, $key);
    }
 
    /**
@@ -421,11 +429,7 @@ class Toolbox {
             $value          = str_replace($complete, $cleancomplete, $value);
          }
 
-         $config                      = ['safe'=>1];
-         $config["elements"]          = "*+iframe+audio+video";
-         $config["direct_list_nest"]  = 1;
-
-         $value                       = htmLawed($value, $config);
+         $value = htmLawed($value, self::getHtmLawedSafeConfig());
 
          // Special case : remove the 'denied:' for base64 img in case the base64 have characters
          // combinaison introduce false positive
@@ -436,6 +440,29 @@ class Toolbox {
       }
 
       return $value;
+   }
+
+   /**
+    * Returns a safe configuration for htmLawed.
+    *
+    * @return array
+    *
+    * @since 9.5.4
+    */
+   public static function getHtmLawedSafeConfig(): array {
+      $config = [
+         'elements'         => '* -applet -canvas -embed -object -script',
+         'deny_attribute'   => 'on*, srcdoc',
+         'comment'          => 1, // 1: remove HTML comments (and do not display their contents)
+         'cdata'            => 1, // 1: remove CDATA sections (and do not display their contents)
+         'direct_list_nest' => 1, // 1: Allow usage of ul/ol tags nested in other ul/ol tags
+         'schemes'          => '*: aim, app, feed, file, ftp, gopher, http, https, irc, mailto, news, nntp, sftp, ssh, tel, telnet'
+      ];
+      if (!GLPI_ALLOW_IFRAME_IN_RICH_TEXT) {
+         $config['elements'] .= '-iframe';
+      }
+
+      return $config;
    }
 
    /**
@@ -623,17 +650,7 @@ class Toolbox {
     * @return void
     */
    static function deprecated($message = "Called method is deprecated") {
-      try {
-         self::log(null, Logger::NOTICE, [$message]);
-      } finally {
-         if (defined('TU_USER')) {
-            if (isCommandLine()) {
-               echo self::backtrace(null);
-            } else {
-               self::backtrace();
-            }
-         }
-      }
+      trigger_error($message, E_USER_DEPRECATED);
    }
 
 
@@ -660,7 +677,10 @@ class Toolbox {
          $ok = error_log(date("Y-m-d H:i:s")."$user\n".$text, 3, GLPI_LOG_DIR."/".$name.".log");
       }
 
-      if (isset($_SESSION['glpi_use_mode'])
+      global $application;
+      if ($application instanceof Application) {
+         $application->getOutput()->writeln('<comment>' . $text . '</comment>', OutputInterface::VERBOSITY_VERY_VERBOSE);
+      } else if (isset($_SESSION['glpi_use_mode'])
           && ($_SESSION['glpi_use_mode'] == Session::DEBUG_MODE)
           && isCommandLine()) {
          $stderr = fopen('php://stderr', 'w');
@@ -860,6 +880,11 @@ class Toolbox {
       $etag = md5_file($file);
       $lastModified = filemtime($file);
 
+      // Make sure there is nothing in the output buffer (In case stuff was added by core or misbehaving plugin).
+      // If there is any extra data, the sent file will be corrupted.
+      while (ob_get_level() > 0) {
+         ob_end_clean();
+      }
       // Now send the file with header() magic
       header("Last-Modified: ".gmdate("D, d M Y H:i:s", $lastModified)." GMT");
       header("Etag: $etag");
@@ -905,7 +930,7 @@ class Toolbox {
       $value = ((array) $value === $value)
                   ? array_map([__CLASS__, 'addslashes_deep'], $value)
                   : (is_null($value)
-                       ? null : (is_resource($value)
+                       ? null : (is_resource($value) || is_object($value)
                        ? $value : $DB->escape(
                           str_replace(
                              ['&#039;', '&#39;', '&#x27;', '&apos;', '&quot;'],
@@ -931,7 +956,7 @@ class Toolbox {
       $value = ((array) $value === $value)
                   ? array_map([__CLASS__, 'stripslashes_deep'], $value)
                   : (is_null($value)
-                        ? null : (is_resource($value)
+                        ? null : (is_resource($value) || is_object($value)
                                     ? $value :stripslashes($value)));
 
       return $value;
@@ -1375,8 +1400,6 @@ class Toolbox {
     * @return string
    **/
    static function checkNewVersionAvailable() {
-      global $CFG_GLPI;
-
       //parse github releases (get last version number)
       $error = "";
       $json_gh_releases = self::getURLContent("https://api.github.com/repos/glpi-project/glpi/releases", $error);
@@ -1393,7 +1416,8 @@ class Toolbox {
       if (strlen(trim($latest_version)) == 0) {
          return $error;
       } else {
-         if (version_compare($CFG_GLPI["version"], $latest_version, '<')) {
+         $currentVersion = preg_replace('/^((\d+\.?)+).*$/', '$1', GLPI_VERSION);
+         if (version_compare($currentVersion, $latest_version, '<')) {
             Config::setConfigurationValues('core', ['founded_new_version' => $latest_version]);
             return sprintf(__('A new version is available: %s.'), $latest_version);
          } else {
@@ -1638,13 +1662,14 @@ class Toolbox {
    /**
     * Executes a curl call
     *
-    * @param string $url    URL to retrieve
-    * @param array  $eopts  Extra curl opts
-    * @param string $msgerr set if problem encountered (default NULL)
+    * @param string $url         URL to retrieve
+    * @param array  $eopts       Extra curl opts
+    * @param string $msgerr      will contains a human readable error string if an error occurs of url returns empty contents
+    * @param string $curl_error  will contains original curl error string if an error occurs
     *
     * @return string
     */
-   public static function callCurl($url, array $eopts = [], &$msgerr = null) {
+   public static function callCurl($url, array $eopts = [], &$msgerr = null, &$curl_error = null) {
       global $CFG_GLPI;
 
       $content = "";
@@ -1662,7 +1687,8 @@ class Toolbox {
       $opts = [
          CURLOPT_URL             => $url,
          CURLOPT_USERAGENT       => "GLPI/".trim($CFG_GLPI["version"]),
-         CURLOPT_RETURNTRANSFER  => 1
+         CURLOPT_RETURNTRANSFER  => 1,
+         CURLOPT_CONNECTTIMEOUT  => 5,
       ] + $eopts;
 
       if (!empty($CFG_GLPI["proxy_name"])) {
@@ -1689,21 +1715,21 @@ class Toolbox {
 
       curl_setopt_array($ch, $opts);
       $content = curl_exec($ch);
-      $errstr = curl_error($ch);
+      $curl_error = curl_error($ch) ?: null;
       curl_close($ch);
 
-      if ($errstr) {
+      if ($curl_error !== null) {
          if (empty($CFG_GLPI["proxy_name"])) {
             //TRANS: %s is the error string
             $msgerr = sprintf(
                __('Connection failed. If you use a proxy, please configure it. (%s)'),
-               $errstr
+               $curl_error
             );
          } else {
             //TRANS: %s is the error string
             $msgerr = sprintf(
                __('Failed to connect to the proxy server (%s)'),
-               $errstr
+               $curl_error
             );
          }
          $content = '';
@@ -2502,6 +2528,13 @@ class Toolbox {
                   $msg .= print_r($row, true);
                   throw new \RuntimeException($msg);
                }
+               if (!isCommandLine()) {
+                  // Flush will prevent proxy to timeout as it will receive data.
+                  // Flush requires a content to be sent, so we sent spaces as multiple spaces
+                  // will be shown as a single one on browser.
+                  echo ' ';
+                  Html::glpi_flush();
+               }
             }
          }
 
@@ -2739,14 +2772,14 @@ class Toolbox {
     * Slugify
     *
     * @param string $string String to slugify
+    * @param string $prefix Prefix to use (anchors cannot begin with a number)
     *
     * @return string
     */
-   public static function slugify($string) {
-      $string = transliterator_transliterate("Any-Latin; NFD; [:Nonspacing Mark:] Remove; NFC; [:Punctuation:] Remove; Lower();", $string);
+   public static function slugify($string, $prefix = 'slug_') {
+      $string = transliterator_transliterate("Any-Latin; Latin-ASCII; [^a-zA-Z0-9\.\ -_] Remove;", $string);
       $string = str_replace(' ', '-', self::strtolower($string, 'UTF-8'));
-      $string = self::removeHtmlSpecialChars($string);
-      $string = preg_replace('~[^0-9a-z]+~i', '-', $string);
+      $string = preg_replace('~[^0-9a-z_\.]+~i', '-', $string);
       $string = trim($string, '-');
       if ($string == '') {
          //prevent empty slugs; see https://github.com/glpi-project/glpi/issues/2946
@@ -2754,7 +2787,7 @@ class Toolbox {
          $string = 'nok_' . Toolbox::getRandomString(10);
       } else if (ctype_digit(substr($string, 0, 1))) {
          //starts with a number; not ok to be used as an html id attribute
-         $string = 'slug_' . $string;
+         $string = $prefix . $string;
       }
       return $string;
    }
@@ -3442,5 +3475,117 @@ HTML;
       }
 
       return class_exists($class) && is_a($class, $deprecated, true);
+   }
+
+   /**
+    * Check URL validity
+    *
+    * @param string $url The URL to check
+    *
+    * @return boolean
+    */
+   public static function isValidWebUrl($url): bool {
+      // Verify absence of known disallowed characters.
+      // It is still possible to have false positives, but a fireproof check would be too complex
+      // (or would require usage of a dedicated lib).
+      return (preg_match(
+         "/^(?:http[s]?:\/\/(?:[^\s`!()\[\]{};'\",<>?«»“”‘’+]+|[^\s`!()\[\]{};:'\".,<>?«»“”‘’+]))$/iu",
+         $url
+      ) === 1);
+   }
+
+   /**
+    * Search for html encoded <email> (&lt;email&gt;) in the given string and
+    * encode them a second time
+    *
+    * @param string $string
+    *
+    * @return string
+    */
+   public static function doubleEncodeEmails($string) {
+      $regex = "/(&lt;[^;]+?@[^;]+?&gt;)/";
+      $string = preg_replace_callback($regex, function($matches) {
+         return htmlentities($matches[1]);
+      }, $string);
+      return $string;
+   }
+
+   /**
+    * Normalizes file name
+    *
+    * @param string filename
+    *
+    * @return string
+    */
+   public static function filename($filename): string {
+      //remove extension
+      $ext = pathinfo($filename, PATHINFO_EXTENSION);
+      $filename = self::slugify(
+         preg_replace(
+            '/\.' . $ext . '$/',
+            '',
+            $filename
+         ),
+         '' //no prefix on filenames
+      );
+
+      $namesize = strlen($filename) + strlen($ext) + 1;
+      if ($namesize > 255) {
+         //limit to 255 characters
+         $filename = substr($filename, 0, $namesize - 255);
+      }
+
+      if (!empty($ext)) {
+         $filename .= '.' . $ext;
+      }
+
+      return $filename;
+   }
+
+   /**
+    * Clean _target argument
+    *
+    * @param string $target Target argument
+    *
+    * @return string
+    */
+   public static function cleanTarget(string $target): string {
+      global $CFG_GLPI;
+
+      $file = preg_replace('/^' . preg_quote($CFG_GLPI['root_doc'], '/') . '/', '', $target);
+      if (file_exists(GLPI_ROOT . $file)) {
+         return $target;
+      }
+
+      return '';
+   }
+
+   /**
+    * Get available tabs for a given item
+    *
+    * @param string   $itemtype Type of the item
+    * @param int|string|null $itemtype Id the item, optional
+    *
+    * @return array
+    */
+   public static function getAvailablesTabs(string $itemtype, $id = null): array {
+      $item = getItemForItemtype($itemtype);
+
+      if (!$item) {
+         return [];
+      }
+
+      if (!is_null($id) && !$item->isNewID($id)) {
+         $item->getFromDB($id);
+      }
+
+      $tabs = $item->defineAllTabs();
+      if (isset($tabs['no_all_tab'])) {
+         unset($tabs['no_all_tab']);
+      }
+      // Add all tab
+      $tabs[-1] = 'All';
+
+      return $tabs;
    }
 }

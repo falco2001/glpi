@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -100,9 +100,10 @@ if (isset($AJAX_INCLUDE)) {
 if (!isset($PLUGINS_INCLUDED)) {
    // PLugin already included
    $PLUGINS_INCLUDED = 1;
+   $PLUGINS_EXCLUDED = isset($PLUGINS_EXCLUDED) ? $PLUGINS_EXCLUDED : [];
    $LOADED_PLUGINS   = [];
    $plugin           = new Plugin();
-   $plugin->init(true);
+   $plugin->init(true, $PLUGINS_EXCLUDED);
 }
 
 

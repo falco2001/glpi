@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -43,13 +43,10 @@ use \APIBaseClass;
  */
 class APIXmlrpc extends APIBaseClass {
 
-   public function setUp() {
-      parent::setUp();
-      $this->boolean(extension_loaded('xmlrpc'))->isTrue('xmlrpc extension is missing');
-   }
-
    public function beforeTestMethod($method) {
       global $CFG_GLPI;
+
+      $this->boolean(extension_loaded('xmlrpc'))->isTrue('xmlrpc extension is missing');
 
       $this->http_client = new GuzzleHttp\Client();
       $this->base_uri    = trim($CFG_GLPI['url_base'], "/")."/apixmlrpc.php";

@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -261,26 +261,22 @@ final class DbUtils {
 
          $itemtype = $prefix.$table;
          // Get real existence of itemtype
-         if (class_exists($itemtype)) {
-            $item_class = new ReflectionClass($itemtype);
-            if (!$item_class->isAbstract() && ($item = $this->getItemForItemtype($itemtype))) {
-               $itemtype                                   = get_class($item);
-               $CFG_GLPI['glpiitemtypetables'][$inittable] = $itemtype;
-               $CFG_GLPI['glpitablesitemtype'][$itemtype]  = $inittable;
-               return $itemtype;
-            }
+         if ($item = $this->getItemForItemtype($itemtype)) {
+            $itemtype                                   = get_class($item);
+            $CFG_GLPI['glpiitemtypetables'][$inittable] = $itemtype;
+            $CFG_GLPI['glpitablesitemtype'][$itemtype]  = $inittable;
+            return $itemtype;
          }
+
          // Namespaced item
          $itemtype = $pref2 . str_replace('_', '\\', $table);
-         if (class_exists($itemtype)) {
-            $item_class = new ReflectionClass($itemtype);
-            if (!$item_class->isAbstract() && ($item = $this->getItemForItemtype($itemtype))) {
-               $itemtype                                   = get_class($item);
-               $CFG_GLPI['glpiitemtypetables'][$inittable] = $itemtype;
-               $CFG_GLPI['glpitablesitemtype'][$itemtype]  = $inittable;
-               return $itemtype;
-            }
+         if ($item = $this->getItemForItemtype($itemtype)) {
+            $itemtype                                   = get_class($item);
+            $CFG_GLPI['glpiitemtypetables'][$inittable] = $itemtype;
+            $CFG_GLPI['glpitablesitemtype'][$itemtype]  = $inittable;
+            return $itemtype;
          }
+
          return "UNKNOWN";
       }
    }
@@ -298,10 +294,45 @@ final class DbUtils {
          //to avoid issues when pecl-event is installed...
          $itemtype = 'Glpi\\Event';
       }
-      if (class_exists($itemtype)) {
-         return new $itemtype();
+
+      // If itemtype starts with "Glpi\" or "GlpiPlugin\" followed by a "\",
+      // then it is a namespaced itemtype that has been "sanitized".
+      // Strip slashes to get its actual value.
+      $sanitized_namespaced_pattern = '/^'
+         . '(' . preg_quote(NS_GLPI, '/') . '|' . preg_quote(NS_PLUG, '/') . ')' // start with GLPI core or plugin namespace
+         . preg_quote('\\', '/') // followed by an additionnal \
+         . '/';
+      if (preg_match($sanitized_namespaced_pattern, $itemtype)) {
+         $itemtype = stripslashes($itemtype);
       }
-      return false;
+
+      if (!is_subclass_of($itemtype, CommonGLPI::class, true)) {
+         // Only CommonGLPI sublasses are valid itemtypes
+         return false;
+      }
+
+      $item_class = new ReflectionClass($itemtype);
+      if ($item_class->isAbstract()) {
+         trigger_error(
+            sprintf('Cannot instanciate "%s" as it is an abstract class.', $itemtype),
+            E_USER_WARNING
+         );
+         return false;
+      }
+
+      if (($constructor = $item_class->getConstructor()) !== null) {
+         foreach ($constructor->getParameters() as $parameter) {
+            if (!$parameter->isOptional()) {
+               trigger_error(
+                  sprintf('Cannot instanciate "%s" as its constructor has non optionnal parameters.', $itemtype),
+                  E_USER_WARNING
+               );
+               return false;
+            }
+         }
+      }
+
+      return new $itemtype();
    }
 
    /**
@@ -1476,12 +1507,12 @@ final class DbUtils {
 
                $email           = UserEmail::getDefaultForUser($ID);
                if (!empty($email)) {
-                  $comments[] = ['name'  => __('Email'),
+                  $comments[] = ['name'  => _n('Email', 'Emails', 1),
                                  'value' => $email];
                }
 
                if (!empty($data["phone"])) {
-                  $comments[] = ['name'  => __('Phone'),
+                  $comments[] = ['name'  => Phone::getTypeName(1),
                                  'value' => $data["phone"]];
                }
 
@@ -1491,7 +1522,7 @@ final class DbUtils {
                }
 
                if ($data["locations_id"] > 0) {
-                  $comments[] = ['name'  => __('Location'),
+                  $comments[] = ['name'  => Location::getTypeName(1),
                                  'value' => Dropdown::getDropdownName("glpi_locations",
                                                                            $data["locations_id"])];
                }

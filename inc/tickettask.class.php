@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -79,7 +79,7 @@ class TicketTask extends CommonITILTask {
    **/
    function canViewItem() {
 
-      if (!parent::canReadITILItem()) {
+      if (!$this->canReadITILItem()) {
          return false;
       }
 
@@ -93,8 +93,9 @@ class TicketTask extends CommonITILTask {
       }
 
       // see task created or affected to me
-      if (($this->fields["users_id"] === Session::getLoginUserID())
-          || ($this->fields["users_id_tech"] === Session::getLoginUserID())) {
+      if (Session::getCurrentInterface() == "central"
+          && ($this->fields["users_id"] === Session::getLoginUserID())
+              || ($this->fields["users_id_tech"] === Session::getLoginUserID())) {
          return true;
       }
 
@@ -115,7 +116,7 @@ class TicketTask extends CommonITILTask {
    **/
    function canCreateItem() {
 
-      if (!parent::canReadITILItem()) {
+      if (!$this->canReadITILItem()) {
          return false;
       }
 
@@ -140,7 +141,7 @@ class TicketTask extends CommonITILTask {
    **/
    function canUpdateItem() {
 
-      if (!parent::canReadITILItem()) {
+      if (!$this->canReadITILItem()) {
          return false;
       }
 
@@ -289,7 +290,7 @@ class TicketTask extends CommonITILTask {
             $params['candel'] = false;
          }
 
-         if ($params['canedit'] && $this->can($ID, UPDATE)) {
+         if ($params['canedit'] && $this->canUpdateItem()) {
             echo Ticket::getSplittedSubmitButtonHtml($this->fields['tickets_id'], 'update');
             echo "</td></tr><tr class='tab_bg_2'>\n";
          }

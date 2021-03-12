@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -135,10 +135,12 @@ class ITILFollowup  extends CommonDBChild {
       }
 
       $itilobject = new $this->fields['itemtype'];
+
       if (!$itilobject->can($this->getField('items_id'), READ)
-        // No validation for closed tickets
-          || in_array($itilobject->fields['status'], $itilobject->getClosedStatusArray())
-             && !$itilobject->isAllowedStatus($itilobject->fields['status'], CommonITILObject::INCOMING)) {
+         // No validation for closed tickets
+         || in_array($itilobject->fields['status'], $itilobject->getClosedStatusArray())
+         && !$itilobject->canReopen()
+      ) {
          return false;
       }
       return $itilobject->canAddFollowups();
@@ -255,19 +257,36 @@ class ITILFollowup  extends CommonDBChild {
           && in_array($parentitem->fields["status"], $parentitem::getReopenableStatusArray())
           && $this->input['_status'] == $parentitem->fields["status"]) {
 
+         $needupdateparent = false;
          if (($parentitem->countUsers(CommonITILActor::ASSIGN) > 0)
              || ($parentitem->countGroups(CommonITILActor::ASSIGN) > 0)
              || ($parentitem->countSuppliers(CommonITILActor::ASSIGN) > 0)) {
-            $update['status'] = CommonITILObject::ASSIGNED;
+
+            //check if lifecycle allowed new status
+            if (Session::isCron()
+                || Session::getCurrentInterface() == "helpdesk"
+                || $parentitem::isAllowedStatus($parentitem->fields["status"], CommonITILObject::ASSIGNED)) {
+               $needupdateparent = true;
+               $update['status'] = CommonITILObject::ASSIGNED;
+            }
          } else {
-            $update['status'] = CommonITILObject::INCOMING;
+            //check if lifecycle allowed new status
+            if (Session::isCron()
+                || Session::getCurrentInterface() == "helpdesk"
+                || $parentitem::isAllowedStatus($parentitem->fields["status"], CommonITILObject::INCOMING)) {
+               $needupdateparent = true;
+               $update['status'] = CommonITILObject::INCOMING;
+            }
          }
 
-         $update['id'] = $parentitem->fields['id'];
+         if ($needupdateparent) {
+            $update['id'] = $parentitem->fields['id'];
 
-         // Use update method for history
-         $parentitem->update($update);
-         $reopened     = true;
+            // Use update method for history
+            $parentitem->update($update);
+            $reopened     = true;
+         }
+
       }
 
       //change ITILObject status only if imput change
@@ -524,7 +543,7 @@ class ITILFollowup  extends CommonDBChild {
          'id'                 => '2',
          'table'              => 'glpi_requesttypes',
          'field'              => 'name',
-         'name'               => __('Request source'),
+         'name'               => RequestType::getTypeName(1),
          'forcegroupby'       => true,
          'datatype'           => 'dropdown'
       ];
@@ -533,7 +552,7 @@ class ITILFollowup  extends CommonDBChild {
          'id'                 => '3',
          'table'              => $this->getTable(),
          'field'              => 'date',
-         'name'               => __('Date'),
+         'name'               => _n('Date', 'Dates', 1),
          'datatype'           => 'datetime'
       ];
 
@@ -549,7 +568,7 @@ class ITILFollowup  extends CommonDBChild {
          'id'                 => '5',
          'table'              => 'glpi_users',
          'field'              => 'name',
-         'name'               => __('User'),
+         'name'               => User::getTypeName(1),
          'datatype'           => 'dropdown',
          'right'              => 'all'
       ];
@@ -558,7 +577,7 @@ class ITILFollowup  extends CommonDBChild {
          'id'                 => '6',
          'table'              => $this->getTable(),
          'field'              => 'itemtype',
-         'name'               => __('Request source'),
+         'name'               => RequestType::getTypeName(1),
          'datatype'           => 'dropdown'
       ];
 
@@ -601,7 +620,7 @@ class ITILFollowup  extends CommonDBChild {
          'id'                 => '36',
          'table'              => static::getTable(),
          'field'              => 'date',
-         'name'               => __('Date'),
+         'name'               => _n('Date', 'Dates', 1),
          'datatype'           => 'datetime',
          'massiveaction'      => false,
          'forcegroupby'       => true,
@@ -630,7 +649,7 @@ class ITILFollowup  extends CommonDBChild {
          'id'                 => '29',
          'table'              => 'glpi_requesttypes',
          'field'              => 'name',
-         'name'               => __('Request source'),
+         'name'               => RequestType::getTypeName(1),
          'datatype'           => 'dropdown',
          'forcegroupby'       => true,
          'massiveaction'      => false,
@@ -805,7 +824,7 @@ class ITILFollowup  extends CommonDBChild {
                          'rows'              => $rows]);
 
          if ($this->fields["date"]) {
-            echo "</td><td>".__('Date')."</td>";
+            echo "</td><td>"._n('Date', 'Dates', 1)."</td>";
             echo "<td>".Html::convDateTime($this->fields["date"]);
          } else {
 
@@ -825,7 +844,7 @@ class ITILFollowup  extends CommonDBChild {
          echo "<td colspan='4'>";
          echo "<div class='fa-label'>
             <i class='fas fa-reply fa-fw'
-               title='"._n('Followup template', 'Followup templates', 2)."'></i>";
+               title='"._n('Followup template', 'Followup templates', Session::getPluralNumber())."'></i>";
          $this->fields['itilfollowuptemplates_id'] = 0;
          ITILFollowupTemplate::dropdown([
             'value'     => $this->fields['itilfollowuptemplates_id'],
@@ -1022,7 +1041,7 @@ JAVASCRIPT;
       $out = "";
       if (count($iterator)) {
          $out .= "<div class='center'><table class='tab_cadre' width='100%'>\n
-                  <tr><th>".__('Date')."</th><th>".__('Requester')."</th>
+                  <tr><th>"._n('Date', 'Dates', 1)."</th><th>"._n('Requester', 'Requesters', 1)."</th>
                   <th>".__('Description')."</th></tr>\n";
 
          $showuserlink = 0;
@@ -1043,11 +1062,6 @@ JAVASCRIPT;
    }
 
 
-   /**
-    * @since 0.85
-    *
-    * @see commonDBTM::getRights()
-    **/
    function getRights($interface = 'central') {
 
       $values = parent::getRights();
@@ -1169,6 +1183,8 @@ JAVASCRIPT;
       $user_table = "",
       $group_table = ""
    ) {
+      $itilfup_table = static::getTable();
+
       // An ITILFollowup parent can only by a CommonItilObject
       if (!is_a($itemtype, "CommonITILObject", true)) {
          throw new InvalidArgumentException(
@@ -1179,7 +1195,7 @@ JAVASCRIPT;
       $rightname = $itemtype::$rightname;
       // Can see all items, no need to go further
       if (Session::haveRight($rightname, $itemtype::READALL)) {
-         return "(`itemtype` = '$itemtype') ";
+         return "(`$itilfup_table`.`itemtype` = '$itemtype') ";
       }
 
       $user   = Session::getLoginUserID();
@@ -1216,15 +1232,15 @@ JAVASCRIPT;
                WHERE `users_id_recipient` = '$user'";
 
             return "(
-               `itemtype` = '$itemtype' AND (
-                  `items_id` IN ($user_query) OR
-                  `items_id` IN ($group_query) OR
-                  `items_id` IN ($recipient_query)
+               `$itilfup_table`.`itemtype` = '$itemtype' AND (
+                  `$itilfup_table`.`items_id` IN ($user_query) OR
+                  `$itilfup_table`.`items_id` IN ($group_query) OR
+                  `$itilfup_table`.`items_id` IN ($recipient_query)
                )
             ) ";
          } else {
             // Can't see any items
-            return "(`itemtype` = '$itemtype' AND 0 = 1) ";
+            return "(`$itilfup_table`.`itemtype` = '$itemtype' AND 0 = 1) ";
          }
       }
    }

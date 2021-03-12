@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -473,6 +473,19 @@ class Update extends CommonGLPI {
          case "9.5.0-dev":
             include_once "{$updir}update_94_95.php";
             update94to95();
+
+         case "9.5.0":
+         case "9.5.1":
+            include_once "{$updir}update_951_952.php";
+            update951to952();
+
+         case "9.5.2":
+            include_once "{$updir}update_952_953.php";
+            update952to953();
+
+         case "9.5.3":
+            include_once "{$updir}update_953_954.php";
+            update953to954();
             break;
 
          case GLPI_VERSION:
@@ -520,7 +533,7 @@ class Update extends CommonGLPI {
       //generate security key if missing, and update db
       $glpikey = new GLPIKey();
       if (!$glpikey->keyExists() && !$glpikey->generate()) {
-         $this->migration->displayWarning(__('Unable to create security key file!'), true);
+         $this->migration->displayWarning(__('Unable to create security key file! You have to run "php bin/console glpi:security:change_key" command to manually create this file.'), true);
       }
    }
 
@@ -602,5 +615,31 @@ class Update extends CommonGLPI {
    public function setMigration(Migration $migration) {
       $this->migration = $migration;
       return $this;
+   }
+
+   /**
+    * Check if expected security key file is missing.
+    *
+    * @return bool
+    */
+   public function isExpectedSecurityKeyFileMissing(): bool {
+      $expected_key_path = $this->getExpectedSecurityKeyFilePath();
+
+      if ($expected_key_path === null) {
+         return false;
+      }
+
+      return !file_exists($expected_key_path);
+   }
+
+   /**
+    * Returns expected security key file path.
+    * Will return null for GLPI versions that was not yet handling a custom security key.
+    *
+    * @return string|null
+    */
+   public function getExpectedSecurityKeyFilePath(): ?string {
+      $glpikey = new GLPIKey();
+      return $glpikey->getExpectedKeyPath($this->getCurrents()['version']);
    }
 }

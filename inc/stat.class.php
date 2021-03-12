@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -159,7 +159,7 @@ class Stat extends CommonGLPI {
             $criteria = [
                'SELECT'    => [
                   'glpi_locations.id',
-                  'glpi_locations. ' . ($is_tree ? 'name' : 'completename') . 'AS location'
+                  'glpi_locations.' . ($is_tree ? 'name' : 'completename') . ' AS location'
                ],
                'DISTINCT'  => true,
                'FROM'      => 'glpi_locations',
@@ -716,9 +716,10 @@ class Stat extends CommonGLPI {
     * @param $param              (default '')
     * @param $value              (default '')
     * @param $value2             (default '')
+    * @param $add_criteria          (default [''])
     */
    static function constructEntryValues($itemtype, $type, $begin = "", $end = "", $param = "", $value = "",
-                                        $value2 = "") {
+                                        $value2 = "", array $add_criteria = []) {
       $DB = \DBConnection::getReadConnection();
 
       if (!$item = getItemForItemtype($itemtype)) {
@@ -747,9 +748,11 @@ class Stat extends CommonGLPI {
       $solved_status  = array_merge($closed_status, $item->getSolvedStatusArray());
 
       $criteria = [];
-      $WHERE           = [
-         "$table.is_deleted" => 0
-      ] + getEntitiesRestrictCriteria($table);
+      $WHERE = [];
+      if ($item->maybeDeleted()) {
+         $WHERE["$table.is_deleted"] = 0;
+      }
+      $WHERE += getEntitiesRestrictCriteria($table);
       $LEFTJOIN          = [];
       $INNERJOIN         = [];
       $LEFTJOINUSER      = [
@@ -1005,7 +1008,7 @@ class Stat extends CommonGLPI {
             $criteria = [
                'SELECT'    => [
                   $date_unix,
-                  'COUNT'  => "$table.id AS total_visites"
+                  'COUNT DISTINCT' => "$table.id AS total_visites"
                ],
                'FROM'      => $table,
                'WHERE'     => $WHERE,
@@ -1026,7 +1029,7 @@ class Stat extends CommonGLPI {
             $criteria = [
                'SELECT'    => [
                   $date_unix,
-                  'COUNT'  => "$table.id AS total_visites"
+                  'COUNT DISTINCT'  => "$table.id AS total_visites"
                ],
                'FROM'      => $table,
                'WHERE'     => $WHERE,
@@ -1053,7 +1056,7 @@ class Stat extends CommonGLPI {
             $criteria = [
                'SELECT'    => [
                   $date_unix,
-                  'COUNT'  => "$table.id AS total_visites"
+                  'COUNT DISTINCT'  => "$table.id AS total_visites"
                ],
                'FROM'      => $table,
                'WHERE'     => $WHERE,
@@ -1074,7 +1077,7 @@ class Stat extends CommonGLPI {
             $criteria = [
                'SELECT'    => [
                   $date_unix,
-                  'COUNT'  => "$table.id AS total_visites"
+                  'COUNT DISTINCT'  => "$table.id AS total_visites"
                ],
                'FROM'      => $table,
                'WHERE'     => $WHERE,
@@ -1096,7 +1099,7 @@ class Stat extends CommonGLPI {
             $criteria = [
                'SELECT'    => [
                   $date_unix,
-                  'COUNT'  => "$table.id AS total_visites"
+                  'COUNT DISTINCT'  => "$table.id AS total_visites"
                ],
                'FROM'      => $table,
                'WHERE'     => $WHERE,
@@ -1212,7 +1215,7 @@ class Stat extends CommonGLPI {
             $criteria = [
                'SELECT'    => [
                   $date_unix,
-                  'COUNT'  => "$table.id AS total_visites"
+                  'COUNT DISTINCT'  => "$table.id AS total_visites"
                ],
                'FROM'      => $table,
                'WHERE'     => $WHERE,
@@ -1224,11 +1227,10 @@ class Stat extends CommonGLPI {
          case "inter_answersatisfaction" :
             $WHERE["$table.status"] = $closed_status;
             $WHERE[] = [
-               'NOT' => [
-                  "$table.closedate"                        => null,
-                  "glpi_ticketsatisfactions.date_answered"  => null
-               ]
+               ['NOT' => ["$table.closedate" => null]],
+               ['NOT' => ["glpi_ticketsatisfactions.date_answered"  => null]],
             ];
+
             $WHERE[] = getDateCriteria("$table.closedate", $begin, $end);
 
             $date_unix = new QueryExpression(
@@ -1245,7 +1247,7 @@ class Stat extends CommonGLPI {
             $criteria = [
                'SELECT'    => [
                   $date_unix,
-                  'COUNT'  => "$table.id AS total_visites"
+                  'COUNT DISTINCT'  => "$table.id AS total_visites"
                ],
                'FROM'      => $table,
                'WHERE'     => $WHERE,
@@ -1299,6 +1301,10 @@ class Stat extends CommonGLPI {
       $entrees = [];
       if (!count($criteria)) {
          return [];
+      }
+
+      if (count($add_criteria)) {
+         $criteria = array_merge_recursive($criteria, $add_criteria);
       }
 
       $iterator = $DB->request($criteria);
@@ -1402,9 +1408,9 @@ class Stat extends CommonGLPI {
          echo Search::showHeader($output_type, $end_display-$start+1, 2, 1);
          $header_num = 1;
          echo Search::showNewLine($output_type);
-         echo Search::showHeaderItem($output_type, _n('Associated element', 'Associated elements', 2), $header_num);
+         echo Search::showHeaderItem($output_type, _n('Associated element', 'Associated elements', Session::getPluralNumber()), $header_num);
          if ($view_entities) {
-            echo Search::showHeaderItem($output_type, __('Entity'), $header_num);
+            echo Search::showHeaderItem($output_type, Entity::getTypeName(1), $header_num);
          }
          echo Search::showHeaderItem($output_type, __('Number of tickets'), $header_num);
          echo Search::showEndLine($output_type);
@@ -1467,7 +1473,7 @@ class Stat extends CommonGLPI {
       $stat_list["Ticket"]["Ticket_Item"]["file"]     = "stat.item.php";
 
       if (Problem::canView()) {
-         $opt_list["Problem"]                               = _n('Problem', 'Problems', Session::getPluralNumber());
+         $opt_list["Problem"]                               = Problem::getTypeName(Session::getPluralNumber());
 
          $stat_list["Problem"]["Problem_Global"]["name"]    = __('Global');
          $stat_list["Problem"]["Problem_Global"]["file"]    = "stat.global.php?itemtype=Problem";
@@ -1932,4 +1938,3 @@ class Stat extends CommonGLPI {
       return "fas fa-chart-bar";
    }
 }
-

@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -67,8 +67,6 @@ class APIRest extends APIBaseClass {
 
       // Check that no errors occured on the test server
       $this->string(file_get_contents(__DIR__ . '/error.log'))->isEmpty();
-
-      parent::afterTestMethod($method);
    }
 
    protected function doHttpRequest($verb = "get", $relative_uri = "", $params = []) {

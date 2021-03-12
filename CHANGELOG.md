@@ -3,7 +3,35 @@
 The present file will list all changes made to the project; according to the
 [Keep a Changelog](http://keepachangelog.com/) project.
 
-## [9.5] unreleased
+## [9.5.4] unreleased
+
+### Changed
+
+- `iframe` elements are not anymore allowed in rich text unless `GLPI_ALLOW_IFRAME_IN_RICH_TEXT` constant is defined to `true`
+
+### API changes
+
+#### Deprecated
+
+- `Search::getMetaReferenceItemtype()`
+
+## [9.5.3] 2020-11-25
+
+### Deprecated
+- Usage of alternative DB connection encoding (`DB::$dbenc` property).
+
+## [9.5.2] 2020-10-07
+
+### API changes
+
+#### Removed
+
+- Ability to use SQL expressions as string in criterion values in SQL iterator (replaced by usage of `QueryExpression`).
+- Ability to delete a plugin image using `/front/pluginimage.send.php` script.
+
+## [9.5.1] 2020-07-16
+
+## [9.5.0] 2020-07-07
 
 ### Added
 
@@ -153,7 +181,9 @@ The present file will list all changes made to the project; according to the
 - `Transfer::createSearchConditionUsingArray()`
 - Unused constants GLPI_FONT_FREESANS and GLPI_SCRIPT_DIR
 
-## [9.4.5] unreleased
+## [9.4.6] 2020-05-05
+
+## [9.4.5] 2019-12-18
 
 ## [9.4.4] 2019-09-24
 

@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -61,7 +61,7 @@ class Config extends CommonDBTM {
 
    static $rightname              = 'config';
 
-   static $undisclosedFields      = ['proxy_passwd', 'smtp_passwd'];
+   static $undisclosedFields      = ['proxy_passwd', 'smtp_passwd', 'glpinetwork_registration_key'];
    static $saferUndisclosedFields = ['admin_email', 'admin_reply'];
 
    static function getTypeName($nb = 0) {
@@ -145,33 +145,36 @@ class Config extends CommonDBTM {
       // Trim automatically endig slash for url_base config as, for all existing occurences,
       // this URL will be prepended to something that starts with a slash.
       if (isset($input["url_base"]) && !empty($input["url_base"])) {
-         $input["url_base"] = rtrim($input["url_base"], '/');
+         if (Toolbox::isValidWebUrl($input["url_base"])) {
+            $input["url_base"] = rtrim($input["url_base"], '/');
+         } else {
+            Session::addMessageAfterRedirect(__('Invalid base URL!'), false, ERROR);
+            return false;
+         }
+      }
+
+      if (isset($input["url_base_api"]) && !empty($input["url_base_api"])) {
+         if (!Toolbox::isValidWebUrl($input["url_base_api"])) {
+            Session::addMessageAfterRedirect(__('Invalid API base URL!'), false, ERROR);
+            return false;
+         }
       }
 
       if (isset($input['allow_search_view']) && !$input['allow_search_view']) {
          // Global search need "view"
          $input['allow_search_global'] = 0;
       }
-      if (isset($input["smtp_passwd"])) {
-         if (empty($input["smtp_passwd"])) {
-            unset($input["smtp_passwd"]);
-         } else {
-            $input["smtp_passwd"] = Toolbox::sodiumEncrypt(stripslashes($input["smtp_passwd"]));
-         }
-      }
 
+      if (isset($input["smtp_passwd"]) && empty($input["smtp_passwd"])) {
+         unset($input["smtp_passwd"]);
+      }
       if (isset($input["_blank_smtp_passwd"]) && $input["_blank_smtp_passwd"]) {
          $input['smtp_passwd'] = '';
       }
 
-      if (isset($input["proxy_passwd"])) {
-         if (empty($input["proxy_passwd"])) {
-            unset($input["proxy_passwd"]);
-         } else {
-            $input["proxy_passwd"] = Toolbox::sodiumEncrypt(stripslashes($input["proxy_passwd"]));
-         }
+      if (isset($input["proxy_passwd"]) && empty($input["proxy_passwd"])) {
+         unset($input["proxy_passwd"]);
       }
-
       if (isset($input["_blank_proxy_passwd"]) && $input["_blank_proxy_passwd"]) {
          $input['proxy_passwd'] = '';
       }
@@ -604,9 +607,9 @@ class Config extends CommonDBTM {
 
       echo "<tr><th>&nbsp;</th>";
       echo "<th>" . __('Alternate username') . "</th>";
-      echo "<th>" . __('User') . "</th>";
-      echo "<th>" . __('Group') . "</th>";
-      echo "<th>" . __('Location') . "</th>";
+      echo "<th>" . User::getTypeName(1) . "</th>";
+      echo "<th>" . Group::getTypeName(1) . "</th>";
+      echo "<th>" . Location::getTypeName(1) . "</th>";
       echo "<th>" . __('Status') . "</th>";
       echo "</tr>";
 
@@ -1635,7 +1638,7 @@ class Config extends CommonDBTM {
          $rate = round(100.0 * $used / ($used + $free));
          $max  = Toolbox::getSize($used + $free);
          $used = Toolbox::getSize($used);
-         echo "<tr><td>" . __('Memory') . "</td>
+         echo "<tr><td>" . _n('Memory', 'Memories', 1) . "</td>
                <td>" . sprintf(__('%1$s / %2$s'), $used, $max) . "</td><td>";
          Html::displayProgressBar('100', $rate, ['simple'       => true,
                                                       'forcepadding' => false]);
@@ -1712,7 +1715,7 @@ class Config extends CommonDBTM {
          $max  = Toolbox::getSize($max);
          $used = Toolbox::getSize($used);
 
-         echo "<tr><td>" . __('Memory') . "</td>
+         echo "<tr><td>" . _n('Memory', 'Memories', 1) . "</td>
          <td>" . sprintf(__('%1$s / %2$s'), $used, $max) . "</td><td>";
          Html::displayProgressBar('100', $rate, ['simple'       => true,
                                                  'forcepadding' => false]);
@@ -1819,7 +1822,7 @@ class Config extends CommonDBTM {
       echo "<td><label for='proxy_name'>" . __('Server') . "</label></td>";
       echo "<td><input type='text' name='proxy_name' id='proxy_name' value='".$CFG_GLPI["proxy_name"]."'></td>";
       //TRANS: Proxy port
-      echo "<td><label for='proxy_port'>" . __('Port') . "</label></td>";
+      echo "<td><label for='proxy_port'>" . _n('Port', 'Ports', 1) . "</label></td>";
       echo "<td><input type='text' name='proxy_port' id='proxy_port' value='".$CFG_GLPI["proxy_port"]."'></td>";
       echo "</tr>";
 
@@ -2068,6 +2071,8 @@ class Config extends CommonDBTM {
                  'check'   => 'Mexitek\\PHPColors\\Color' ],
                [ 'name'    => 'guzzlehttp/guzzle',
                  'check'   => 'GuzzleHttp\\Client' ],
+               [ 'name'    => 'guzzlehttp/psr7',
+                 'check'   => 'GuzzleHttp\\Psr7\\Response' ],
                [ 'name'    => 'wapmorgan/unified-archive',
                  'check'   => 'wapmorgan\\UnifiedArchive\\UnifiedArchive' ],
                [ 'name'    => 'paragonie/sodium_compat',
@@ -2263,7 +2268,7 @@ class Config extends CommonDBTM {
             return $tabs;
 
          case 'GLPINetwork':
-            return __('GLPI Network');
+            return 'GLPI Network';
 
          case Impact::getType():
             return Impact::getTypeName();
@@ -3014,8 +3019,15 @@ class Config extends CommonDBTM {
    **/
    static function setConfigurationValues($context, array $values = []) {
 
+      $glpikey = new GLPIKey();
+
       $config = new self();
       foreach ($values as $name => $value) {
+         // Encrypt config values according to list declared to GLPIKey service
+         if (!empty($value) && $glpikey->isConfigSecured($context, $name)) {
+            $value = Toolbox::sodiumEncrypt($value);
+         }
+
          if ($config->getFromDBByCrit([
             'context'   => $context,
             'name'      => $name
@@ -3131,15 +3143,6 @@ class Config extends CommonDBTM {
       if (isset($conf[$optname])) {
          $opt = json_decode($conf[$optname], true);
          Toolbox::logDebug("CACHE CONFIG  $optname", $opt);
-      }
-
-      //use memory adapter when called from tests
-      if (defined('TU_USER') && !defined('CACHED_TESTS')) {
-         $opt['adapter'] = 'memory';
-      }
-      //force FS adapter for translations for tests
-      if (defined('TU_USER') && $optname == 'cache_trans') {
-         $opt['adapter'] = 'filesystem';
       }
 
       if (!isset($opt['options']['namespace'])) {
@@ -3288,10 +3291,6 @@ class Config extends CommonDBTM {
          }
       }
 
-      if (defined('TU_USER')) {
-         $skip_integrity_checks = true;
-      }
-
       if ($psr16) {
          return new SimpleCache($storage, GLPI_CACHE_DIR, !$skip_integrity_checks);
       } else {
@@ -3321,7 +3320,7 @@ class Config extends CommonDBTM {
     *
     * @since 9.3
     *
-    * @return void
+    * @return void|boolean (display) Returns false if there is a rights error.
     */
    function showFormLogs() {
       global $CFG_GLPI;
@@ -3392,7 +3391,7 @@ class Config extends CommonDBTM {
       echo "<td class='center'></td><td>";
       echo "</td></tr>";
 
-      echo "<tr class='tab_bg_1'><th colspan='4'>"._n('Software', 'Software', 2)."</th></tr>";
+      echo "<tr class='tab_bg_1'><th colspan='4'>"._n('Software', 'Software', Session::getPluralNumber())."</th></tr>";
       echo "<tr class='tab_bg_1'><td class='center'>".
            __("Installation/uninstallation of software on items")."</td><td>";
       self::showLogsInterval('purge_item_software_install',
@@ -3419,7 +3418,7 @@ class Config extends CommonDBTM {
       echo "</td>";
       echo "<td colspan='2'></td></tr>";
 
-      echo "<tr class='tab_bg_1'><th colspan='4'>"._n('User', 'Users', 2)."</th></tr>";
+      echo "<tr class='tab_bg_1'><th colspan='4'>".User::getTypeName(Session::getPluralNumber())."</th></tr>";
 
       echo "<tr class='tab_bg_1'><td class='center'>".
            __("Add/remove profiles to users")."</td><td>";
@@ -3440,7 +3439,7 @@ class Config extends CommonDBTM {
       echo "</td>";
       echo "</tr>";
 
-      echo "<tr class='tab_bg_1'><th colspan='4'>"._n('Component', 'Components', 2)."</th></tr>";
+      echo "<tr class='tab_bg_1'><th colspan='4'>"._n('Component', 'Components', Session::getPluralNumber())."</th></tr>";
 
       echo "<tr class='tab_bg_1'><td class='center'>".__("Add component")."</td><td>";
       self::showLogsInterval('purge_adddevice', $CFG_GLPI["purge_adddevice"]);
@@ -3527,7 +3526,7 @@ class Config extends CommonDBTM {
     *
     * @since 9.5.0
     *
-    * @return void
+    * @return void|boolean (display) Returns false if there is a rights error.
     */
    function showFormSecurity() {
       global $CFG_GLPI;
@@ -3745,6 +3744,10 @@ class Config extends CommonDBTM {
       return [$this->getType(), 1];
    }
 
+   public function post_addItem() {
+      $this->logConfigChange($this->fields['context'], $this->fields['name'], (string)$this->fields['value'], '');
+   }
+
    public function post_updateItem($history = 1) {
       global $DB;
 
@@ -3768,13 +3771,37 @@ class Config extends CommonDBTM {
          );
       }
 
-      // Keep it at the end as it alter $this->oldvalues
-      if (count($this->oldvalues)) {
-         foreach ($this->oldvalues as &$value) {
-            $value = $this->fields['name'] . ' ' . $value;
-         }
-         Log::constructHistory($this, $this->oldvalues, $this->fields);
+      if (array_key_exists('value', $this->oldvalues)) {
+         $this->logConfigChange(
+            $this->fields['context'],
+            $this->fields['name'],
+            (string)$this->fields['value'],
+            (string)$this->oldvalues['value']
+         );
       }
+   }
+
+   public function post_purgeItem() {
+      $this->logConfigChange($this->fields['context'], $this->fields['name'], '', (string)$this->fields['value']);
+   }
+
+   /**
+    * Log config change in history.
+    *
+    * @param string $context
+    * @param string $name
+    * @param string $newvalue
+    * @param string $oldvalue
+    *
+    * @return void
+    */
+   private function logConfigChange(string $context, string $name, string $newvalue, string $oldvalue): void {
+      $glpi_key = new GLPIKey();
+      if ($glpi_key->isConfigSecured($context, $name)) {
+         $newvalue = $oldvalue = '********';
+      }
+      $oldvalue = $name . ($context !== 'core' ? ' (' . $context . ') ' : ' ') . $oldvalue;
+      Log::constructHistory($this, ['value' => $oldvalue], ['value' => $newvalue]);
    }
 
    /**

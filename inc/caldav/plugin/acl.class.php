@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -36,11 +36,16 @@ if (!defined('GLPI_ROOT')) {
    die("Sorry. You can't access this file directly");
 }
 
+use CommonDBTM;
 use Glpi\CalDAV\Backend\Principal;
+use Glpi\CalDAV\Traits\CalDAVPrincipalsTrait;
 use Glpi\CalDAV\Traits\CalDAVUriUtilTrait;
+use PlanningExternalEvent;
 use Sabre\CalDAV\Calendar;
 use Sabre\CalDAV\CalendarObject;
+use Sabre\DAVACL\IACL;
 use Sabre\DAVACL\Plugin;
+use Session;
 
 /**
  * ACL plugin for CalDAV server.
@@ -49,6 +54,7 @@ use Sabre\DAVACL\Plugin;
  */
 class Acl extends Plugin {
 
+   use CalDAVPrincipalsTrait;
    use CalDAVUriUtilTrait;
 
    public $principalCollectionSet = [
@@ -65,15 +71,18 @@ class Acl extends Plugin {
 
       $acl = parent::getAcl($node);
 
-      // Authenticated user have read access to all nodes, as node list only contains elements
-      // that user can read.
+      if (!($node instanceof IACL) || ($owner_path = $node->getOwner()) === null
+          || !$this->canViewPrincipalObjects($owner_path)) {
+         return $acl;
+      }
+
       $acl[] = [
          'principal' => '{DAV:}authenticated',
          'privilege' => '{DAV:}read',
          'protected' => true,
       ];
 
-      if ($node instanceof Calendar && \Session::haveRight(\PlanningExternalEvent::$rightname, UPDATE)) {
+      if ($node instanceof Calendar && Session::haveRight(PlanningExternalEvent::$rightname, UPDATE)) {
          // If user can update external events, then he is able to write on calendar to create new events.
          $acl[] = [
             'principal' => '{DAV:}authenticated',
@@ -82,7 +91,7 @@ class Acl extends Plugin {
          ];
       } else if ($node instanceof CalendarObject) {
          $item = $this->getCalendarItemForPath($node->getName());
-         if ($item instanceof \CommonDBTM && $item->can($item->fields['id'], UPDATE)) {
+         if ($item instanceof CommonDBTM && $item->can($item->fields['id'], UPDATE)) {
             $acl[] = [
                'principal' => '{DAV:}authenticated',
                'privilege' => '{DAV:}write',

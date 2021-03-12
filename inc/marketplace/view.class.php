@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -139,7 +139,7 @@ class View extends CommonGLPI {
       if (!GLPINetwork::isServicesAvailable()) {
          array_push(
             $messages,
-            __("GLPI Network services website seems not available from your network or offline"),
+            sprintf(__('%1$s services website seems not available from your network or offline'), 'GLPI Network'),
             "<a href='".$CFG_GLPI['root_doc']."/front/config.form.php?forcetab=Config$5'>".
             __("Maybe you could setup a proxy").
             "</a> ".
@@ -153,9 +153,9 @@ class View extends CommonGLPI {
 
             array_push(
                $messages,
-               __('Your GLPI Network registration is not valid.'),
+               sprintf(__('Your %1$s registration is not valid.'), 'GLPI Network'),
                __('A registration, at least a free one, is required to use marketplace!'),
-               "<a href='".GLPI_NETWORK_SERVICES."'>".__('Register on GLPI Network')."</a> ".
+               "<a href='".GLPI_NETWORK_SERVICES."'>".sprintf(__('Register on %1$s'), 'GLPI Network')."</a> ".
                __('and'). " ".
                "<a href='$config_url'>".__("fill your registration key in setup.")."</a>"
             );
@@ -189,15 +189,16 @@ class View extends CommonGLPI {
       bool $only_lis = false,
       string $string_filter = ""
    ) {
-      if (!self::checkRegister()) {
-         return;
-      }
 
-      $api         = self::getAPI();
       $plugin_inst = new Plugin;
       $plugin_inst->init(true); // reload plugins
       $installed   = $plugin_inst->getList();
-      $apiplugins  = $api->getAllPlugins($force_refresh);
+
+      $apiplugins  = [];
+      if (self::checkRegister()) {
+         $api         = self::getAPI();
+         $apiplugins  = $api->getAllPlugins($force_refresh);
+      }
 
       $plugins = [];
       foreach ($installed as $plugin) {
@@ -269,6 +270,7 @@ class View extends CommonGLPI {
          $nb_plugins = $api->getNbPlugins($tag_filter);
       }
 
+      header("X-GLPI-Marketplace-Total: $nb_plugins");
       self::displayList($plugins, "discover", $only_lis, $nb_plugins, $sort);
    }
 
@@ -314,8 +316,6 @@ class View extends CommonGLPI {
       if (!self::canView()) {
          return false;
       }
-
-      header("X-GLPI-Marketplace-Total: $nb_plugins");
 
       $plugins_li = "";
       foreach ($plugins as $plugin) {
@@ -469,17 +469,17 @@ JS;
 
       $home_url = strlen($plugin['homepage_url'] ?? "")
          ? "<a href='{$plugin['homepage_url']}' target='_blank' >
-            <i class='fas fa-home add_tooltip' title='".__("Homepage", 'marketplace')."'></i>
+            <i class='fas fa-home add_tooltip' title='".__s("Homepage")."'></i>
             </a>"
          : "";
       $issues_url = strlen($plugin['issues_url'] ?? "")
          ? "<a href='{$plugin['issues_url']}' target='_blank' >
-            <i class='fas fa-bug add_tooltip' title='".__("Get help", 'marketplace')."'></i>
+            <i class='fas fa-bug add_tooltip' title='".__s("Get help")."'></i>
             </a>"
          : "";
       $readme_url = strlen($plugin['readme_url'] ?? "")
          ? "<a href='{$plugin['readme_url']}' target='_blank' >
-            <i class='fas fa-book add_tooltip' title='".__("Readme", 'marketplace')."'></i>
+            <i class='fas fa-book add_tooltip' title='".__s("Readme")."'></i>
             </a>"
          : "";
       $icon    = self::getPluginIcon($plugin);
@@ -582,7 +582,7 @@ HTML;
     * @return string the buttons html
     */
    static function getButtons(string $plugin_key = ""): string {
-      global $PLUGIN_HOOKS;
+      global $CFG_GLPI, $PLUGIN_HOOKS;
 
       $rand               = mt_rand();
       $plugin_inst        = new Plugin;
@@ -590,12 +590,13 @@ HTML;
       $is_installed       = $plugin_inst->isInstalled($plugin_key);
       $is_actived         = $plugin_inst->isActivated($plugin_key);
       $mk_controller      = new Controller($plugin_key);
-      $update_version     = $mk_controller->checkUpdate($plugin_inst);
-      $has_an_update      = $update_version !== false;
+      $web_update_version = $mk_controller->checkUpdate($plugin_inst);
+      $has_web_update     = $web_update_version !== false;
+      $has_loc_update     = $plugin_inst->isUpdatable($plugin_key);
       $can_be_overwritten = $mk_controller->canBeOverwritten();
       $can_be_downloaded  = $mk_controller->canBeDownloaded();
       $required_offers    = $mk_controller->getRequiredOffers();
-      $can_be_updated     = $has_an_update && $can_be_overwritten;
+      $can_be_updated     = $has_web_update && $can_be_overwritten;
       $can_be_cleaned     = $exists && !$plugin_inst->isLoadable($plugin_key);
       $config_page        = $PLUGIN_HOOKS['config_page'][$plugin_key] ?? "";
 
@@ -607,6 +608,15 @@ HTML;
             $error.= "<span class='error'>" . ob_get_contents() . "</span>";
          }
          ob_end_clean();
+
+         $function = 'plugin_' . $plugin_key . '_check_prerequisites';
+         if ($do_activate && function_exists($function)) {
+            ob_start();
+            if (!$function()) {
+               $error .= '<span class="error">' . ob_get_contents() . '</span>';
+            }
+            ob_end_clean();
+         }
       }
 
       $buttons = "";
@@ -625,12 +635,12 @@ HTML;
             <i class='fas fa-broom'></i>
          </button>";
       } else if ((!$exists && !$mk_controller->hasWriteAccess())
-         || ($has_an_update && !$can_be_overwritten)) {
+         || ($has_web_update && !$can_be_overwritten)) {
          $plugin_data = $mk_controller->getAPI()->getPlugin($plugin_key);
          if (array_key_exists('installation_url', $plugin_data) && $can_be_downloaded) {
             $warning = "";
-            if ($has_an_update) {
-               $warning = __("The plugin has an available update but its directory is not writable.")."<br>";
+            if ($has_web_update) {
+               $warning = __s("The plugin has an available update but its directory is not writable.")."<br>";
             }
 
             $warning.= sprintf(
@@ -638,7 +648,13 @@ HTML;
                GLPI_ROOT . '/plugins'
             );
 
-            $buttons .="<a href='{$plugin_data['installation_url']}' target='_blank'>
+            // Use "marketplace.download.php" proxy if archive is downloadable from GLPI marketplace plugins API
+            // as this API will refuse to serve the archive if registration key is not set in headers.
+            $download_url = Toolbox::startsWith($plugin_data['installation_url'], GLPI_MARKETPLACE_PLUGINS_API_URI)
+               ? $CFG_GLPI['root_doc'] . '/front/marketplace.download.php?key=' . $plugin_key
+               : $plugin_data['installation_url'];
+
+            $buttons .="<a href='{$download_url}' target='_blank'>
                <button title='$warning' class='add_tooltip download_manually'><i class='fas fa-archive'></i></button>
             </a>";
          }
@@ -652,7 +668,7 @@ HTML;
          } else if ($can_be_updated) {
             $update_title = sprintf(
                __s("A new version (%s) is available, update ?", 'marketplace'),
-               $update_version
+               $web_update_version
             );
             $buttons .="<button class='modify_plugin'
                                 data-action='update_plugin'
@@ -676,10 +692,16 @@ HTML;
       }
 
       if ($exists && !$can_be_cleaned && !$is_installed && !strlen($error)) {
+         $title = __s("Install");
+         $icon  = "fas fa-folder-plus";
+         if ($has_loc_update) {
+            $title = __s("Update");
+            $icon  =  "far fa-caret-square-up";
+         }
          $buttons .="<button class='modify_plugin'
                              data-action='install_plugin'
-                             title='".__s("Install")."'>
-            <i class='fas fa-folder-plus'></i>
+                             title='$title'>
+            <i class='$icon'></i>
          </button>";
       }
 
@@ -771,12 +793,12 @@ HTML;
          $html = "<div class='offers'>
             <a href='".GLPI_NETWORK_SERVICES."' target='_blank'
                class='badge glpi-network'
-               title='".__("You must have a GLPI Network subscription to get this plugin")."'>
-               <i class='fas fa-star'></i>".__('Network')."
+               title='".sprintf(__s("You must have a %s subscription to get this plugin"), 'GLPI Network')."'>
+               <i class='fas fa-star'></i>GLPI Network
             </a>
             <a href='".GLPI_NETWORK_SERVICES."' target='_blank'
                class='badge $offerkey'
-               title='".sprintf(__("You need at least the %s subscription level to get this plugin"), $offerlabel)."'>
+               title='".sprintf(__s("You need at least the %s subscription level to get this plugin"), $offerlabel)."'>
                $offerlabel
             </a>
          </div>";
@@ -947,7 +969,7 @@ HTML;
             $('#marketplace_dialog').dialog({
                'modal': true,
                'width': 'auto',
-               'title': \"".__("Switch to marketplace")."\"
+               'title': \"".__s("Switch to marketplace")."\"
             });
          });");
       }

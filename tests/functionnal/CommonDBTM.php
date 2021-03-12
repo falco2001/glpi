@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -180,8 +180,7 @@ class CommonDBTM extends DbTestCase {
       $this->array($comp->fields)->isEmpty();
 
       $this->boolean($comp->getEmpty())->isTrue();
-      $this->array($comp->fields)
-         ->integer['entities_id']->isIdenticalTo($_SESSION["glpiactive_entity"]);
+      $this->array($comp->fields)->integer['entities_id']->isEqualTo(0);
 
       $_SESSION["glpiactive_entity"] = 12;
       $this->boolean($comp->getEmpty())->isTrue();
@@ -953,6 +952,8 @@ class CommonDBTM extends DbTestCase {
 
       $entity_id = getItemByTypeName('Entity', '_test_root_entity', true);
 
+      $this->login(); // must be logged as Document_Item uses Session::getLoginUserID()
+
       $computer = new \Computer();
       $relation_item = new $relation_itemtype();
 
@@ -1070,13 +1071,12 @@ class CommonDBTM extends DbTestCase {
       array $active_entities,
       array $expected
    ) {
-      $old_active_entities = $_SESSION['glpiactiveentities'];
       $_SESSION['glpiactiveentities'] = $active_entities;
 
       $res = \CommonDBTM::checkTemplateEntity($data, $parent_id, $parent_itemtype);
       $this->array($res)->isEqualTo($expected);
 
       // Reset session
-      $_SESSION['glpiactiveentities'] = $old_active_entities;
+      unset($_SESSION['glpiactiveentities']);
    }
 }

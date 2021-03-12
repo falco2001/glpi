@@ -10,7 +10,7 @@
 GLPI stands for **Gestionnaire Libre de Parc Informatique** is a Free Asset and IT Management Software package, that provides ITIL Service Desk features, licenses tracking and software auditing.
 
 GLPI features:
-* Inventory of computers, peripherals, network printers and any associated components through an interface, with inventory tools such as: [FusionInventory](http://fusioninventory.org/) or [OCS Inventory](https://www.ocsinventory-ng.org/fr/)
+* Inventory of computers, peripherals, network printers and any associated components through an interface, with inventory tools such as: [FusionInventory](http://fusioninventory.org/) or [OCS Inventory](https://www.ocsinventory-ng.org/)
 * Data Center Infrastructure Management (DCIM)
 * Item lifecycle management
 * Licenses management (ITIL compliant)
@@ -50,24 +50,29 @@ It is distributed under the GNU GENERAL PUBLIC LICENSE Version 2 - please consul
 
 * A web server (Apache, Nginx, IIS, etc.)
 * MariaDB >= 10.0 or MySQL >= 5.6
-* PHP 5.6 or higher
+* PHP 7.2 or higher
 * Mandatory PHP extensions:
+    - ctype
+    - curl
+    - gd (picture generation)
+    - iconv
+    - intl
     - json
     - mbstring
-    - iconv
     - mysqli
     - session
-    - gd (picture generation)
-    - curl (CAS authentication)
+    - simplexml
+    - zlib
 
 * Recommended PHP extensions (to enable optional features)
-    - domxml (CAS authentication)
+    - exif (security enhancement on images validation)
     - imap (mail collector and users authentication)
     - ldap (users authentication)
     - openssl (encrypted communication)
+    - sodium (performances enhancement on sensitive data encryption/decryption)
+    - zip and bz2 (installation of zip and bz2 packages from marketplace)
 
  * Supported browsers:
-    - IE 11+
     - Edge
     - Firefox (including 2 latests ESR version)
     - Chrome

@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -41,6 +41,8 @@ use DB;
 use GLPI;
 use Glpi\Application\ErrorHandler;
 use Glpi\Console\Command\ForceNoPluginsOptionCommandInterface;
+use Glpi\Console\Command\GlpiCommandInterface;
+use Glpi\System\RequirementsManager;
 use Plugin;
 use Session;
 use Toolbox;
@@ -58,6 +60,20 @@ use Symfony\Component\Console\Exception\RuntimeException;
 use Symfony\Component\Console\Output\OutputInterface;
 
 class Application extends BaseApplication {
+
+   /**
+    * Error code returned when system requirements are missing.
+    *
+    * @var integer
+    */
+   const ERROR_MISSING_REQUIREMENTS = 128; // start application codes at 128 be sure to be different from commands codes
+
+   /**
+    * Error code returned when DB is not up-to-date.
+    *
+    * @var integer
+    */
+   const ERROR_DB_OUTDATED = 129;
 
    /**
     * Pointer to $CFG_GLPI.
@@ -97,10 +113,10 @@ class Application extends BaseApplication {
       $loader = new CommandLoader(false);
       $this->setCommandLoader($loader);
 
-      $use_plugins = $this->usePlugins();
-      if ($use_plugins) {
-         $this->loadActivePlugins();
-         $loader->registerPluginsCommands();
+      if ($this->usePlugins()) {
+         $plugin = new Plugin();
+         $plugin->init(true);
+         $loader->setIncludePlugins(true);
       }
    }
 
@@ -215,6 +231,21 @@ class Application extends BaseApplication {
 
       $begin_time = microtime(true);
 
+      if ($command instanceof GlpiCommandInterface && $command->requiresUpToDateDb()
+          && (!array_key_exists('dbversion', $this->config) || (trim($this->config['dbversion']) != GLPI_SCHEMA_VERSION))) {
+         $output->writeln(
+            '<error>'
+            . __('The version of the database is not compatible with the version of the installed files. An update is necessary.')
+            . '</error>'
+         );
+         return self::ERROR_DB_OUTDATED;
+      }
+
+      if ($command instanceof GlpiCommandInterface && $command->mustCheckMandatoryRequirements()
+          && !$this->checkCoreMandatoryRequirements()) {
+         return self::ERROR_MISSING_REQUIREMENTS;
+      }
+
       $result = parent::doRunCommand($command, $input, $output);
 
       if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERY_VERBOSE) {
@@ -274,7 +305,7 @@ class Application extends BaseApplication {
     */
    private function initDb() {
 
-      if (!class_exists('DB', false)) {
+      if (!class_exists('DB', false) || !class_exists('mysqli', false)) {
          return;
       }
 
@@ -397,26 +428,14 @@ class Application extends BaseApplication {
    }
 
    /**
-    * Load active plugins.
-    *
-    * @return void
-    */
-   private function loadActivePlugins() {
-
-      if (!($this->db instanceof DB) || !$this->db->connected) {
-         return;
-      }
-
-      $plugin = new Plugin();
-      $plugin->init(true);
-   }
-
-   /**
     * Whether or not plugins have to be used.
     *
     * @return boolean
     */
    private function usePlugins() {
+      if (!($this->db instanceof DB) || !$this->db->connected) {
+         return false;
+      }
 
       $input = new ArgvInput();
 
@@ -431,5 +450,32 @@ class Application extends BaseApplication {
       }
 
       return !$input->hasParameterOption('--no-plugins', true);
+   }
+
+   /**
+    * Check if core mandatory requirements are OK.
+    *
+    * @return boolean  true if requirements are OK, false otherwise
+    */
+   private function checkCoreMandatoryRequirements(): bool {
+      $db = property_exists($this, 'db') ? $this->db : null;
+
+      $requirements_manager = new RequirementsManager();
+      $core_requirements = $requirements_manager->getCoreRequirementList(
+         $db instanceof \DBmysql && $db->connected ? $db : null
+      );
+
+      if ($core_requirements->hasMissingMandatoryRequirements()) {
+         $message = __('Some mandatory system requirements are missing.')
+            . ' '
+            . __('Run "php bin/console glpi:system:check_requirements" for more details.');
+         $this->output->writeln(
+            '<error>' . $message . '</error>',
+            OutputInterface::VERBOSITY_QUIET
+         );
+         return false;
+      }
+
+      return true;
    }
 }

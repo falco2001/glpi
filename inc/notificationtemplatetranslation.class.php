@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -349,7 +349,7 @@ class NotificationTemplateTranslation extends CommonDBChild {
       echo "<tr><th>".__('Tag')."</th>
                 <th>".__('Label')."</th>
                 <th>"._n('Event', 'Events', 1)."</th>
-                <th>".__('Type')."</th>
+                <th>"._n('Type', 'Types', 1)."</th>
                 <th>".__('Possible values')."</th>
             </tr>";
 

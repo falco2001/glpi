@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -82,7 +82,7 @@ class ProblemTask extends CommonITILTask {
     * @return boolean
    **/
    function canViewItem() {
-      return parent::canReadITILItem();
+      return $this->canReadITILItem();
    }
 
 
@@ -92,7 +92,7 @@ class ProblemTask extends CommonITILTask {
     * @return boolean
    **/
    function canCreateItem() {
-      if (!parent::canReadITILItem()) {
+      if (!$this->canReadITILItem()) {
          return false;
       }
 
@@ -117,7 +117,7 @@ class ProblemTask extends CommonITILTask {
    **/
    function canUpdateItem() {
 
-      if (!parent::canReadITILItem()) {
+      if (!$this->canReadITILItem()) {
          return false;
       }
 

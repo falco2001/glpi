@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -194,26 +194,46 @@ class Plugins {
          $plugins_colct = array_combine($plugins_keys, $plugins);
 
          foreach ($plugins_colct as &$plugin) {
-            if (count($plugin['versions']) === 0) {
-               continue;
-            }
-
-            if (!GLPI_MARKETPLACE_PRERELEASES) {
-               $plugin['versions'] = array_filter($plugin['versions'], function($version) {
-                  return !isset($version['stability']) || $version['stability'] === "stable";
-               });
-            }
-
-            $first_found_version = current($plugin['versions']);
-            if (is_array($first_found_version)) {
-               $plugin['installation_url'] = $first_found_version['download_url'];
-               $plugin['version'] = $first_found_version['num'];
-            }
+            usort(
+               $plugin['versions'],
+               function ($a, $b) {
+                  return version_compare($a['num'], $b['num']);
+               }
+            );
          }
 
-         self::$plugins = $plugins_colct;
-         $GLPI_CACHE->set('marketplace_all_plugins', self::$plugins, HOUR_TIMESTAMP);
+         $GLPI_CACHE->set('marketplace_all_plugins', $plugins_colct, HOUR_TIMESTAMP);
       }
+
+      // Filter versions.
+      // Done after caching process to be able to handle change of "GLPI_MARKETPLACE_PRERELEASES"
+      // without having to purge the cache manually.
+      foreach ($plugins_colct as &$plugin) {
+         if (!GLPI_MARKETPLACE_PRERELEASES) {
+            $plugin['versions'] = array_filter($plugin['versions'], function($version) {
+               return !isset($version['stability']) || $version['stability'] === "stable";
+            });
+         }
+
+         if (count($plugin['versions']) === 0) {
+            continue;
+         }
+
+         $higher_version = end($plugin['versions']);
+         if (is_array($higher_version)) {
+            $plugin['installation_url'] = $higher_version['download_url'];
+            $plugin['version'] = $higher_version['num'];
+         }
+      }
+      self::$plugins = $plugins_colct;
+
+      // Remove plugins with no versions for current config (i.e. only unstable versions that are not proposed).
+      $plugins_colct = array_filter(
+         $plugins_colct,
+         function($plugin) {
+            return count($plugin['versions']) > 0;
+         }
+      );
 
       if (strlen($tag_filter) > 0) {
          $tagged_plugins = array_column($this->getPluginsForTag($tag_filter), 'key');
@@ -448,47 +468,58 @@ class Plugins {
     *
     * @return bool
     */
-   public function downloadArchive(string $url, string $dest, string $plugin_key): bool {
-      if (!isset($_SESSION['marketplace_dl_progress'])) {
-         $_SESSION['marketplace_dl_progress'] = [];
+   public function downloadArchive(string $url, string $dest, string $plugin_key, bool $track_progress = true): bool {
+      if ($track_progress) {
+         if (!isset($_SESSION['marketplace_dl_progress'])) {
+            $_SESSION['marketplace_dl_progress'] = [];
+         }
+         $_SESSION['marketplace_dl_progress'][$plugin_key] = 0;
       }
-      $_SESSION['marketplace_dl_progress'][$plugin_key] = 0;
 
       // close session to permits polling of progress by frontend
       session_write_close();
 
-      $response = $this->request(
-         $url,
-         [
-            'headers'  => [
-               'Accept' => '*/*',
-            ],
-            'sink'     => $dest,
+      $options = [
+         'headers'  => [
+            'Accept' => '*/*',
+         ],
+         'sink'     => $dest,
+      ];
+      if ($track_progress) {
+         // track download progress
+         $options['progress'] = function($downloadTotal, $downloadedBytes) use ($plugin_key) {
+            // Prevent "net::ERR_RESPONSE_HEADERS_TOO_BIG" error
+            // Each time Session::start() is called, PHP add a 'Set-Cookie' header,
+            // so if a plugin takes more than a few seconds to be downloaded, PHP will set too many
+            // 'Set-Cookie' headers and response will not be accepted by browser.
+            // We can remove the 'Set-Cookie' here as it will be put back on next instruction (Session::start()).
+            header_remove('Set-Cookie');
 
-            // track download progress
-            'progress' => function($downloadTotal, $downloadedBytes) use ($plugin_key) {
-               // restart session to store percentage of download for this plugin
-               Session::start();
+            // restart session to store percentage of download for this plugin
+            Session::start();
 
-               // calculate percent based on the size and store it in session
-               $percent = 0;
-               if ($downloadTotal > 0) {
-                  $percent = round($downloadedBytes * 100 / $downloadTotal);
-               }
-               $_SESSION['marketplace_dl_progress'][$plugin_key] = $percent;
-
-               // reclose session to avoid blocking ajax requests
-               session_write_close();
+            // calculate percent based on the size and store it in session
+            $percent = 0;
+            if ($downloadTotal > 0) {
+               $percent = round($downloadedBytes * 100 / $downloadTotal);
             }
-         ]
-      );
+            $_SESSION['marketplace_dl_progress'][$plugin_key] = $percent;
+
+            // reclose session to avoid blocking ajax requests
+            session_write_close();
+         };
+      }
+
+      $response = $this->request($url, $options);
 
       // restart session to permits write of vars
       // (later, we also may have some addMessageAfterRedirect to provider errors to user)
       Session::start();
 
-      // force finish of download (to avoid keeping js loop in case of errors)
-      $_SESSION['marketplace_dl_progress'][$plugin_key] = 100;
+      if ($track_progress) {
+         // force finish of download (to avoid keeping js loop in case of errors)
+         $_SESSION['marketplace_dl_progress'][$plugin_key] = 100;
+      }
 
       return $response !== false && $response->getStatusCode() === 200;
    }

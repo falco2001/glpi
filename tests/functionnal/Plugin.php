@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -64,12 +64,20 @@ class Plugin extends DbTestCase {
       if (defined('GLPI_PREVER')) {
          $this->string($plugin->getGlpiPrever())->isIdenticalTo(GLPI_PREVER);
       } else {
-         $this->when(
-            function () use ($plugin) {
-               $plugin->getGlpiPrever();
-            }
-         )->error
-            ->exists();
+         if (version_compare(PHP_VERSION, '8.0.0-dev', '<')) {
+            $this->when(
+               function () use ($plugin) {
+                  $plugin->getGlpiPrever();
+               }
+            )->error
+               ->exists();
+         } else {
+            $this->exception(
+               function () use ($plugin) {
+                  $plugin->getGlpiPrever();
+               }
+            )->message->contains('Undefined constant "GLPI_PREVER"');
+         }
       }
    }
 
@@ -333,6 +341,10 @@ class Plugin extends DbTestCase {
          $expected_data,
          'Unable to load plugin "' . $this->test_plugin_directory . '" informations.'
       );
+
+      // check also Plugin::isActivated method
+      $plugin_inst = new \Plugin();
+      $this->boolean($plugin_inst->isActivated($this->test_plugin_directory));
    }
 
    /**
@@ -391,6 +403,10 @@ class Plugin extends DbTestCase {
          $expected_data,
          'Plugin "' . $this->test_plugin_directory . '" version changed. It has been deactivated as its update process has to be launched.'
       );
+
+      // check also Plugin::isUpdatable method
+      $plugin_inst = new \Plugin();
+      $this->boolean($plugin_inst->isUpdatable($this->test_plugin_directory));
    }
 
    /**
@@ -540,6 +556,10 @@ class Plugin extends DbTestCase {
          $expected_data,
          'Plugin "' . $this->test_plugin_directory . '" version changed. It has been deactivated as its update process has to be launched.'
       );
+
+      // check also Plugin::isUpdatable method
+      $plugin_inst = new \Plugin();
+      $this->boolean($plugin_inst->isUpdatable($this->test_plugin_directory));
    }
 
    /**
@@ -636,6 +656,10 @@ class Plugin extends DbTestCase {
          $expected_data,
          'Plugin "' . $this->test_plugin_directory . '" prerequisites are not matched. It has been deactivated.'
       );
+
+      // check also Plugin::isUpdatable method
+      $plugin_inst = new \Plugin();
+      $this->boolean($plugin_inst->isUpdatable($this->test_plugin_directory));
    }
 
    /**
@@ -759,6 +783,10 @@ class Plugin extends DbTestCase {
          $setup_informations,
          $expected_data
       );
+
+      // check also Plugin::isActivated method
+      $plugin_inst = new \Plugin();
+      $this->boolean($plugin_inst->isActivated($this->test_plugin_directory));
    }
 
    /**

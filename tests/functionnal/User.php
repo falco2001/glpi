@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -53,6 +53,8 @@ class User extends \DbTestCase {
     *
     */
    public function testLostPassword() {
+      //would not be logical to login here
+      $_SESSION['glpicronuserrunning'] = "cron_phpunit";
       $user = getItemByTypeName('User', TU_USER);
 
       // Test request for a password with invalid email
@@ -196,15 +198,13 @@ class User extends \DbTestCase {
 
       $input = ['name' => 'invalid+login'];
       $this->boolean($user->prepareInputForAdd($input))->isFalse();
-      $this->array($_SESSION['MESSAGE_AFTER_REDIRECT'])->isIdenticalTo([ERROR => ['The login is not valid. Unable to add the user.']]);
-      $_SESSION['MESSAGE_AFTER_REDIRECT'] = []; //reset
+      $this->hasSessionMessages(ERROR, ['The login is not valid. Unable to add the user.']);
 
       //add same user twice
       $input = ['name' => 'new_user'];
       $this->integer($user->add($input))->isGreaterThan(0);
       $this->boolean($user->add($input))->isFalse(0);
-      $this->array($_SESSION['MESSAGE_AFTER_REDIRECT'])->isIdenticalTo([ERROR => ['Unable to add. The user already exists.']]);
-      $_SESSION['MESSAGE_AFTER_REDIRECT'] = []; //reset
+      $this->hasSessionMessages(ERROR, ['Unable to add. The user already exists.']);
 
       $input = [
          'name'      => 'user_pass',
@@ -212,8 +212,7 @@ class User extends \DbTestCase {
          'password2' => 'nomatch'
       ];
       $this->boolean($user->prepareInputForAdd($input))->isFalse();
-      $this->array($_SESSION['MESSAGE_AFTER_REDIRECT'])->isIdenticalTo([ERROR => ['Error: the two passwords do not match']]);
-      $_SESSION['MESSAGE_AFTER_REDIRECT'] = []; //reset
+      $this->hasSessionMessages(ERROR, ['Error: the two passwords do not match']);
 
       $input = [
          'name'      => 'user_pass',
@@ -292,7 +291,7 @@ class User extends \DbTestCase {
     * @dataProvider prepareInputForTimezoneUpdateProvider
     */
    public function testPrepareInputForUpdateTimezone(array $input, $expected) {
-
+      $this->login();
       $user = $this->newTestedInstance();
       $username = 'prepare_for_update_' . mt_rand();
       $user_id = $user->add(
@@ -329,7 +328,7 @@ class User extends \DbTestCase {
                'password'  => 'new_pass',
                'password2' => 'new_pass_not_match'
             ],
-            false,
+            'expected'  => false,
             'messages'  => [ERROR => ['Error: the two passwords do not match']],
          ],
          [
@@ -349,7 +348,7 @@ class User extends \DbTestCase {
     * @dataProvider prepareInputForUpdatePasswordProvider
     */
    public function testPrepareInputForUpdatePassword(array $input, $expected, array $messages = null) {
-
+      $this->login();
       $user = $this->newTestedInstance();
       $username = 'prepare_for_update_' . mt_rand();
       $user_id = $user->add(
@@ -663,7 +662,6 @@ class User extends \DbTestCase {
    public function testPre_updateInDB() {
       $this->login();
       $user = $this->newTestedInstance();
-      $_SESSION['MESSAGE_AFTER_REDIRECT'] = [];
 
       $uid = (int)$user->add([
          'name' => 'preupdate_user'
@@ -675,14 +673,14 @@ class User extends \DbTestCase {
          'id'     => $uid,
          'name'   => 'preupdate_user_edited'
       ]))->isTrue();
-      $this->array($_SESSION['MESSAGE_AFTER_REDIRECT'])->isIdenticalTo([]);
+      $this->hasNoSessionMessages([ERROR, WARNING]);
 
       //can update with same name when id is identical
       $this->boolean($user->update([
          'id'     => $uid,
          'name'   => 'preupdate_user_edited'
       ]))->isTrue();
-      $this->array($_SESSION['MESSAGE_AFTER_REDIRECT'])->isIdenticalTo([]);
+      $this->hasNoSessionMessages([ERROR, WARNING]);
 
       $this->integer(
          (int)$user->add(['name' => 'do_exist'])
@@ -691,8 +689,7 @@ class User extends \DbTestCase {
          'id'     => $uid,
          'name'   => 'do_exist'
       ]))->isTrue();
-      $this->array($_SESSION['MESSAGE_AFTER_REDIRECT'])->isIdenticalTo([ERROR => ['Unable to update login. A user already exists.']]);
-      $_SESSION['MESSAGE_AFTER_REDIRECT'] = []; //reset
+      $this->hasSessionMessages(ERROR, ['Unable to update login. A user already exists.']);
 
       $this->boolean($user->getFromDB($uid))->isTrue();
       $this->string($user->fields['name'])->isIdenticalTo('preupdate_user_edited');
@@ -701,8 +698,7 @@ class User extends \DbTestCase {
          'id'     => $uid,
          'name'   => 'in+valid'
       ]))->isTrue();
-      $this->array($_SESSION['MESSAGE_AFTER_REDIRECT'])->isIdenticalTo([ERROR => ['The login is not valid. Unable to update login.']]);
-      $_SESSION['MESSAGE_AFTER_REDIRECT'] = []; //reset
+      $this->hasSessionMessages(ERROR, ['The login is not valid. Unable to update login.']);
    }
 
    public function testGetIdByName() {
@@ -758,33 +754,33 @@ class User extends \DbTestCase {
 
       return [
          [
-            'password_last_update'            => date('Y-m-d H:i:s', strtotime('-10 years', $time)),
-            'password_expiration_delay'       => -1,
-            'password_expiration_notice'      => -1,
+            'last_update'                     => date('Y-m-d H:i:s', strtotime('-10 years', $time)),
+            'expiration_delay'                => -1,
+            'expiration_notice'               => -1,
             'expected_expiration_time'        => null,
             'expected_should_change_password' => false,
             'expected_has_password_expire'    => false,
          ],
          [
-            'password_last_update'            => date('Y-m-d H:i:s', strtotime('-10 days', $time)),
-            'password_expiration_delay'       => 15,
-            'password_expiration_notice'      => -1,
+            'last_update'                     => date('Y-m-d H:i:s', strtotime('-10 days', $time)),
+            'expiration_delay'                => 15,
+            'expiration_notice'               => -1,
             'expected_expiration_time'        => strtotime('+5 days', $time),
             'expected_should_change_password' => false, // not yet in notice time
             'expected_has_password_expire'    => false,
          ],
          [
-            'password_last_update'            => date('Y-m-d H:i:s', strtotime('-10 days', $time)),
-            'password_expiration_delay'       => 15,
-            'password_expiration_notice'      => 10,
+            'last_update'                     => date('Y-m-d H:i:s', strtotime('-10 days', $time)),
+            'expiration_delay'                => 15,
+            'expiration_notice'               => 10,
             'expected_expiration_time'        => strtotime('+5 days', $time),
             'expected_should_change_password' => true,
             'expected_has_password_expire'    => false,
          ],
          [
-            'password_last_update'            => date('Y-m-d H:i:s', strtotime('-20 days', $time)),
-            'password_expiration_delay'       => 15,
-            'password_expiration_notice'      => -1,
+            'last_update'                     => date('Y-m-d H:i:s', strtotime('-20 days', $time)),
+            'expiration_delay'                => 15,
+            'expiration_notice'               => -1,
             'expected_expiration_time'        => strtotime('-5 days', $time),
             'expected_should_change_password' => true,
             'expected_has_password_expire'    => true,
@@ -862,9 +858,9 @@ class User extends \DbTestCase {
       return [
          // validate that cron does nothing if password expiration is not active (default config)
          [
-            'password_expiration_delay'      => -1,
-            'password_expiration_notice'     => -1,
-            'password_expiration_lock_delay' => -1,
+            'expiration_delay'               => -1,
+            'notice_delay'                   => -1,
+            'lock_delay'                     => -1,
             'cron_limit'                     => 100,
             'expected_result'                => 0, // 0 = nothing to do
             'expected_notifications_count'   => 0,
@@ -872,9 +868,9 @@ class User extends \DbTestCase {
          ],
          // validate that cron send no notification if password_expiration_notice == -1
          [
-            'password_expiration_delay'      => 15,
-            'password_expiration_notice'     => -1,
-            'password_expiration_lock_delay' => -1,
+            'expiration_delay'               => 15,
+            'notice_delay'                   => -1,
+            'lock_delay'                     => -1,
             'cron_limit'                     => 100,
             'expected_result'                => 0, // 0 = nothing to do
             'expected_notifications_count'   => 0,
@@ -882,9 +878,9 @@ class User extends \DbTestCase {
          ],
          // validate that cron send notifications instantly if password_expiration_notice == 0
          [
-            'password_expiration_delay'      => 50,
-            'password_expiration_notice'     => 0,
-            'password_expiration_lock_delay' => -1,
+            'expiration_delay'               => 50,
+            'notice_delay'                   => 0,
+            'lock_delay'                     => -1,
             'cron_limit'                     => 100,
             'expected_result'                => 1, // 1 = fully processed
             'expected_notifications_count'   => 5, // 5 users should be notified (them which has password set more than 50 days ago)
@@ -892,9 +888,9 @@ class User extends \DbTestCase {
          ],
          // validate that cron send notifications before expiration if password_expiration_notice > 0
          [
-            'password_expiration_delay'      => 50,
-            'password_expiration_notice'     => 20,
-            'password_expiration_lock_delay' => -1,
+            'expiration_delay'               => 50,
+            'notice_delay'                   => 20,
+            'lock_delay'                     => -1,
             'cron_limit'                     => 100,
             'expected_result'                => 1, // 1 = fully processed
             'expected_notifications_count'   => 7, // 7 users should be notified (them which has password set more than 50-20 days ago)
@@ -902,9 +898,9 @@ class User extends \DbTestCase {
          ],
          // validate that cron returns partial result if there is too many notifications to send
          [
-            'password_expiration_delay'      => 50,
-            'password_expiration_notice'     => 20,
-            'password_expiration_lock_delay' => -1,
+            'expiration_delay'               => 50,
+            'notice_delay'                   => 20,
+            'lock_delay'                     => -1,
             'cron_limit'                     => 5,
             'expected_result'                => -1, // -1 = partially processed
             'expected_notifications_count'   => 5, // 5 on 7 users should be notified (them which has password set more than 50-20 days ago)
@@ -912,9 +908,9 @@ class User extends \DbTestCase {
          ],
          // validate that cron disable users instantly if password_expiration_lock_delay == 0
          [
-            'password_expiration_delay'      => 50,
-            'password_expiration_notice'     => -1,
-            'password_expiration_lock_delay' => 0,
+            'expiration_delay'               => 50,
+            'notice_delay'                   => -1,
+            'lock_delay'                     => 0,
             'cron_limit'                     => 100,
             'expected_result'                => 1, // 1 = fully processed
             'expected_notifications_count'   => 0,
@@ -922,9 +918,9 @@ class User extends \DbTestCase {
          ],
          // validate that cron disable users with given delay if password_expiration_lock_delay > 0
          [
-            'password_expiration_delay'      => 20,
-            'password_expiration_notice'     => -1,
-            'password_expiration_lock_delay' => 10,
+            'expiration_delay'               => 20,
+            'notice_delay'                   => -1,
+            'lock_delay'                     => 10,
             'cron_limit'                     => 100,
             'expected_result'                => 1, // 1 = fully processed
             'expected_notifications_count'   => 0,

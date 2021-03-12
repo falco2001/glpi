@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -73,26 +73,6 @@ class CalendarSegment extends CommonDBChild {
          return false;
       }
       return parent::prepareInputForAdd($input);
-   }
-
-   /**
-    * get the request results to get items associated to the given one (defined by $itemtype and $items_id)
-    *
-    * @param string  $itemtype          the type of the item we want the resulting items to be associated to
-    * @param string  $items_id          the name of the item we want the resulting items to be associated to
-    *
-    * @return array the items associated to the given one (empty if none was found)
-   **/
-   static function getItemsAssociationRequest($itemtype, $items_id) {
-      global $DB;
-
-      return $DB->request([
-         'SELECT' => 'id',
-         'FROM'   => static::getTable(),
-         'WHERE'  => [
-            static::$items_id  => $items_id
-         ]
-      ]);
    }
 
    /**
@@ -383,7 +363,7 @@ class CalendarSegment extends CommonDBChild {
          echo "<table class='tab_cadre_fixe'>";
          echo "<tr class='tab_bg_1'><th colspan='7'>".__('Add a schedule')."</tr>";
 
-         echo "<tr class='tab_bg_2'><td class='center'>".__('Day')."</td><td>";
+         echo "<tr class='tab_bg_2'><td class='center'>"._n('Day', 'Days', 1)."</td><td>";
          echo "<input type='hidden' name='calendars_id' value='$ID'>";
          Dropdown::showFromArray('day', Toolbox::getDaysOfWeekArray());
          echo "</td><td class='center'>".__('Start').'</td><td>';
@@ -413,7 +393,7 @@ class CalendarSegment extends CommonDBChild {
          echo Html::getCheckAllAsCheckbox('mass'.__CLASS__.$rand);
          echo "</th>";
       }
-      echo "<th>".__('Day')."</th>";
+      echo "<th>"._n('Day', 'Days', 1)."</th>";
       echo "<th>".__('Start')."</th>";
       echo "<th>".__('End')."</th>";
       echo "</tr>";

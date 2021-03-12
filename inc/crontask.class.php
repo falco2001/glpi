@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -180,6 +180,7 @@ class CronTask extends CommonDBTM{
    /**
     * Signal handler callback
     *
+    * @param integer $signo Signal number
     * @since 9.1
     */
    function signal($signo) {
@@ -396,12 +397,12 @@ class CronTask extends CommonDBTM{
          // Build query for frequency and allowed hour
          $WHERE[] = ['OR' => [
             ['AND' => [
-               ['hourmin'   => ['<', $DB->quoteName('hourmax')]],
+               ['hourmin'   => ['<', new QueryExpression($DB->quoteName('hourmax'))]],
                'hourmin'   => ['<=', $hour],
                'hourmax'   => ['>', $hour]
             ]],
             ['AND' => [
-               'hourmin'   => ['>', $DB->quoteName('hourmax')],
+               'hourmin'   => ['>', new QueryExpression($DB->quoteName('hourmax'))],
                'OR'        => [
                   'hourmin'   => ['<=', $hour],
                   'hourmax'   => ['>', $hour]
@@ -829,9 +830,6 @@ class CronTask extends CommonDBTM{
             if ($crontask->getNeedToRun($mode, $name)) {
                $_SESSION["glpicronuserrunning"] = "cron_".$crontask->fields['name'];
 
-               if ($plug = isPluginItemType($crontask->fields['itemtype'])) {
-                  Plugin::load($plug['plugin'], true);
-               }
                $fonction = [$crontask->fields['itemtype'],
                                  'cron' . $crontask->fields['name']];
 
@@ -954,7 +952,7 @@ class CronTask extends CommonDBTM{
 
       $iterator = $DB->request([
          'FROM'   => self::getTable(),
-         'WHERE'  => ['itemtype' => ['LIKE', "Plugin$plugin"]]
+         'WHERE'  => ['itemtype' => ['LIKE', "Plugin$plugin%"]]
       ]);
 
       while ($data = $iterator->next()) {
@@ -1127,7 +1125,7 @@ class CronTask extends CommonDBTM{
       if (count($iterator)) {
          echo "<table class='tab_cadrehov'>";
          $header = "<tr>";
-         $header .= "<th>".__('Date')."</th>";
+         $header .= "<th>"._n('Date', 'Dates', 1)."</th>";
          $header .= "<th>".__('Total duration')."</th>";
          $header .= "<th>"._x('quantity', 'Number')."</th>";
          $header .= "<th>".__('Description')."</th>";
@@ -1187,7 +1185,7 @@ class CronTask extends CommonDBTM{
 
       if (count($iterator)) {
          echo "<table class='tab_cadrehov'><tr>";
-         echo "<th>".__('Date')."</th>";
+         echo "<th>"._n('Date', 'Dates', 1)."</th>";
          echo "<th>".__('Status')."</th>";
          echo "<th>". __('Duration')."</th>";
          echo "<th>"._x('quantity', 'Number')."</th>";

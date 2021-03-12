@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -112,9 +112,6 @@ class DocumentType  extends CommonDropdown {
    }
 
 
-   /**
-    * @since 0.84
-   **/
    static function getSpecificValueToDisplay($field, $values, array $options = []) {
       global $CFG_GLPI;
 

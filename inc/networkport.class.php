@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -181,9 +181,6 @@ class NetworkPort extends CommonDBChild {
       return true;
    }
 
-   /**
-    * @see CommonDBTM::prepareInputForUpdate
-    */
    function prepareInputForUpdate($input) {
       if (!isset($input["_no_history"])) {
          $input['_no_history'] = false;
@@ -196,9 +193,6 @@ class NetworkPort extends CommonDBChild {
       return $input;
    }
 
-   /**
-    * @see CommonDBTM::post_updateItem
-    */
    function post_updateItem($history = 1) {
       global $DB;
 
@@ -227,9 +221,6 @@ class NetworkPort extends CommonDBChild {
       $this->updateDependencies(!$this->input['_no_history']);
    }
 
-   /**
-   * @see CommonDBTM::post_clone
-   */
    function post_clone($source, $history) {
       parent::post_clone($source, $history);
       $instantiation = $source->getInstantiation();
@@ -379,9 +370,6 @@ class NetworkPort extends CommonDBChild {
    }
 
 
-   /**
-    * @see CommonDBTM::prepareInputForAdd
-    */
    function prepareInputForAdd($input) {
 
       if (isset($input["logical_number"]) && (strlen($input["logical_number"]) == 0)) {
@@ -400,9 +388,6 @@ class NetworkPort extends CommonDBChild {
       return parent::prepareInputForAdd($input);
    }
 
-   /**
-    * @see CommonDBTM::post_addItem
-    */
    function post_addItem() {
       $this->updateDependencies(!$this->input['_no_history']);
    }
@@ -877,7 +862,7 @@ class NetworkPort extends CommonDBChild {
       echo "</td></tr>\n";
 
       if (!$options['several']) {
-         echo "<tr class='tab_bg_1'><td>". _n('Port number', 'Ports number', 1) ."</td>\n";
+         echo "<tr class='tab_bg_1'><td>". _n('Port number', 'Port numbers', 1) ."</td>\n";
          echo "<td>";
          Html::autocompletionTextField($this, "logical_number", ['size' => 5]);
          echo "</td></tr>\n";
@@ -972,7 +957,7 @@ class NetworkPort extends CommonDBChild {
          'id'                 => '88',
          'table'              => 'glpi_vlans',
          'field'              => 'name',
-         'name'               => __('VLAN'),
+         'name'               => Vlan::getTypeName(1),
          'datatype'           => 'dropdown',
          'forcegroupby'       => true,
          'massiveaction'      => false,
@@ -983,9 +968,6 @@ class NetworkPort extends CommonDBChild {
    }
 
 
-   /**
-    * @see CommonDBTM::getSpecificMassiveActions()
-   **/
    function getSpecificMassiveActions($checkitem = null) {
 
       $isadmin = $checkitem !== null && $checkitem->canUpdate();
@@ -1031,7 +1013,7 @@ class NetworkPort extends CommonDBChild {
          'id'                 => '3',
          'table'              => $this->getTable(),
          'field'              => 'logical_number',
-         'name'               => __('Port number'),
+         'name'               => _n('Port number', 'Port numbers', 1),
          'datatype'           => 'integer',
          'autocomplete'       => true,
       ];
@@ -1055,13 +1037,15 @@ class NetworkPort extends CommonDBChild {
          'massiveaction'      => false
       ];
 
-      $tab[] = [
-         'id'                 => '9',
-         'table'              => 'glpi_netpoints',
-         'field'              => 'name',
-         'name'               => _n('Network outlet', 'Network outlets', 1),
-         'datatype'           => 'dropdown'
-      ];
+      if ($this->isField('netpoints_id')) {
+         $tab[] = [
+            'id'                 => '9',
+            'table'              => 'glpi_netpoints',
+            'field'              => 'name',
+            'name'               => _n('Network outlet', 'Network outlets', 1),
+            'datatype'           => 'dropdown'
+         ];
+      }
 
       $tab[] = [
          'id'                 => '16',
@@ -1075,7 +1059,7 @@ class NetworkPort extends CommonDBChild {
          'id'                 => '20',
          'table'              => $this->getTable(),
          'field'              => 'itemtype',
-         'name'               => __('Type'),
+         'name'               => _n('Type', 'Types', 1),
          'datatype'           => 'itemtype',
          'massiveaction'      => false
       ];
@@ -1235,4 +1219,19 @@ class NetworkPort extends CommonDBChild {
       return $specificities;
    }
 
+   public function computeFriendlyName() {
+      global $DB;
+
+      $iterator = $DB->request([
+         'SELECT' => ['name'],
+         'FROM'   => $this->fields['itemtype']::getTable(),
+         'WHERE'  => ['id' => $this->fields['items_id']]
+      ]);
+
+      if ($iterator->count()) {
+         return sprintf(__('%1$s on %2$s'), parent::computeFriendlyName(), $iterator->next()['name']);
+      }
+
+      return parent::computeFriendlyName();
+   }
 }

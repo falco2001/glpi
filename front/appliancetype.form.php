@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -30,7 +30,7 @@
  * ---------------------------------------------------------------------
  */
 
-include '../inc/includes.php';
+include ('../inc/includes.php');
 
 $dropdown = new ApplianceType();
-include GLPI_ROOT . "/front/dropdown.common.form.php";
+include (GLPI_ROOT . "/front/dropdown.common.form.php");

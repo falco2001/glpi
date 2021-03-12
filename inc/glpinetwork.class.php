@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -34,10 +34,10 @@ if (!defined('GLPI_ROOT')) {
    die("Sorry. You can't access this file directly");
 }
 
-class GLPINetwork {
+class GLPINetwork extends CommonGLPI {
 
-   public function getTabNameForItem() {
-      return __('GLPI Network');
+   public function getTabNameForItem(CommonGLPI $item, $withtemplate = 0) {
+      return 'GLPI Network';
    }
 
    static function displayTabContentForItem(CommonGLPI $item, $tabnum = 1, $withtemplate = 0) {
@@ -53,7 +53,6 @@ class GLPINetwork {
       }
 
       $registration_key = self::getRegistrationKey();
-      $informations = self::getRegistrationInformations();
 
       $canedit = Config::canUpdate();
       if ($canedit) {
@@ -67,9 +66,25 @@ class GLPINetwork {
       if ($registration_key === "") {
          echo "<tr><td colspan='2'>".
          __('A registration key is needed to use advanced feature (like marketplace) in GLPI')."<br><br>".
-         "<a href='".GLPI_NETWORK_SERVICES."'>".__('Register on GLPI Network!')."</a><br>".
+         "<a href='".GLPI_NETWORK_SERVICES."'>".sprintf(__('Register on %1$s!'), 'GLPI Network')."</a><br>".
          __("And retrieve your key to paste it below").
          "</td></tr>";
+      }
+
+      $curl_error = null;
+      if (!self::isServicesAvailable($curl_error)) {
+         echo '<tr>';
+         echo '<td colspan="2">';
+         echo '<div class="warning">';
+         echo '<i class="fa fa-exclamation-triangle fa-2x"></i>';
+         echo sprintf(__('%1$s services website seems not available from your network or offline'), 'GLPI Network');
+         if ($curl_error !== null) {
+            echo '<br />';
+            echo sprintf(__('Error was: %s'), $curl_error);
+         }
+         echo '</div>';
+         echo '</td>';
+         echo '</tr>';
       }
 
       echo "<tr class='tab_bg_2'>";
@@ -78,6 +93,7 @@ class GLPINetwork {
       echo "</tr>";
 
       if ($registration_key !== "") {
+         $informations = self::getRegistrationInformations();
          if (!empty($informations['validation_message'])) {
             echo "<tr class='tab_bg_2'>";
             echo "<td></td>";
@@ -146,7 +162,7 @@ class GLPINetwork {
     */
    public static function getRegistrationKey(): string {
       global $CFG_GLPI;
-      return $CFG_GLPI['glpinetwork_registration_key'] ?? '';
+      return Toolbox::sodiumDecrypt($CFG_GLPI['glpinetwork_registration_key'] ?? '');
    }
 
    /**
@@ -162,8 +178,9 @@ class GLPINetwork {
       global $GLPI_CACHE;
 
       $registration_key = self::getRegistrationKey();
+      $lang = preg_replace('/^([a-z]+)_.+$/', '$1', $_SESSION["glpilanguage"]);
 
-      $cache_key = sprintf('registration_%s_informations', sha1($registration_key));
+      $cache_key = sprintf('registration_%s_%s_informations', sha1($registration_key), $lang);
       if (($informations = $GLPI_CACHE->get($cache_key)) !== null) {
          return $informations;
       }
@@ -186,6 +203,7 @@ class GLPINetwork {
          [
             CURLOPT_HTTPHEADER => [
                'Accept:application/json',
+               'Accept-Language: ' . $lang,
                'Content-Type:application/json',
                'User-Agent:' . self::getGlpiUserAgent(),
                'X-Registration-Key:' . $registration_key,
@@ -198,13 +216,22 @@ class GLPINetwork {
       if ($error_message !== null || json_last_error() !== JSON_ERROR_NONE
           || !is_array($registration_data) || !array_key_exists('is_valid', $registration_data)) {
          $informations['validation_message'] = __('Unable to fetch registration informations.');
+         Toolbox::logError(
+            'Unable to fetch registration informations.',
+            $error_message,
+            $registration_response
+         );
          return $informations;
       }
 
       $informations['is_valid']           = $registration_data['is_valid'];
-      $informations['validation_message'] = $registration_data['is_valid']
-         ? __('The registration key is valid.')
-         : __('The registration key is invalid.');
+      if (array_key_exists('validation_message', $registration_data)) {
+         $informations['validation_message'] = $registration_data['validation_message'];
+      } else {
+         $informations['validation_message'] = $registration_data['is_valid']
+            ? __('The registration key is valid.')
+            : __('The registration key is invalid.');
+      }
       $informations['owner']              = $registration_data['owner'];
       $informations['subscription']       = $registration_data['subscription'];
 
@@ -231,18 +258,26 @@ class GLPINetwork {
          "<a href='".GLPI_NETWORK_SERVICES."' target='_blank'>".GLPI_NETWORK_SERVICES."</a>"));
    }
 
-   public static function getErrorMessage() {
+   public static function getSupportPromoteMessage() {
       return nl2br(sprintf(__("Having troubles setting up an advanced GLPI module?\n".
          "We can help you solve them. Sign up for support on %s."),
          "<a href='".GLPI_NETWORK_SERVICES."' target='_blank'>".GLPI_NETWORK_SERVICES."</a>"));
    }
 
    public static function addErrorMessageAfterRedirect() {
-      Session::addMessageAfterRedirect(self::getErrorMessage(), false, ERROR);
+      Session::addMessageAfterRedirect(self::getSupportPromoteMessage(), false, ERROR);
    }
 
-   public static function isServicesAvailable() {
-      $content = \Toolbox::callCurl(GLPI_NETWORK_REGISTRATION_API_URL);
+   /**
+    * Executes a curl call
+    *
+    * @param string $curl_error  will contains original curl error string if an error occurs
+    *
+    * @return boolean
+    */
+   public static function isServicesAvailable(&$curl_error = null) {
+      $error_msg = null;
+      $content = \Toolbox::callCurl(GLPI_NETWORK_REGISTRATION_API_URL, [], $error_msg, $curl_error);
       return strlen($content) > 0;
    }
 
@@ -256,17 +291,30 @@ class GLPINetwork {
          return $GLPI_CACHE->get($cache_key);
       }
 
+      $error_message = null;
       $response = \Toolbox::callCurl(
          rtrim(GLPI_NETWORK_REGISTRATION_API_URL, '/') . '/offers',
          [
-            CURLOPT_HTTPHEADER => ['Accept-Language: ' . $lang]
-         ]
+            CURLOPT_HTTPHEADER => [
+               'Accept:application/json',
+               'Accept-Language: ' . $lang,
+            ]
+         ],
+         $error_message
       );
-      $offers   = json_decode($response, true);
 
-      if (is_array($offers)) {
-         $GLPI_CACHE->set($cache_key, $offers, HOUR_TIMESTAMP);
+      $offers = $error_message === null ? json_decode($response) : null;
+
+      if ($error_message !== null || json_last_error() !== JSON_ERROR_NONE || !is_array($offers)) {
+         Toolbox::logError(
+            'Unable to fetch offers informations.',
+            $error_message,
+            $response
+         );
+         return [];
       }
+
+      $GLPI_CACHE->set($cache_key, $offers, HOUR_TIMESTAMP);
 
       return $offers;
    }

@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -60,12 +60,15 @@ class Toolbox extends \GLPITestCase {
    protected function slugifyProvider() {
       return [
          [
-            'string'    => 'My - string èé  Ê À ß',
-            'expcected' => 'my-string-ee-e-a-sz'
+            'string'   => 'My - string èé  Ê À ß',
+            'expected' => 'my-string-ee-e-a-ss'
          ], [
             //https://github.com/glpi-project/glpi/issues/2946
-            'string'    => 'Έρευνα ικανοποίησης - Αιτήματα',
-            'expcected' => 'ereuna-ikanopoieses-aitemata'
+            'string'   => 'Έρευνα ικανοποίησης - Αιτήματα',
+            'expected' => 'ereuna-ikanopoieses-aitemata'
+         ], [
+            'string'   => 'a-valid-one',
+            'expected' => 'a-valid-one',
          ]
       ];
    }
@@ -75,6 +78,57 @@ class Toolbox extends \GLPITestCase {
     */
    public function testSlugify($string, $expected) {
       $this->string(\Toolbox::slugify($string))->isIdenticalTo($expected);
+   }
+
+   protected function filenameProvider() {
+      return [
+         [
+            'name'  => '00-logoteclib.png',
+            'expected'  => '00-logoteclib.png',
+         ], [
+            // Space is missing between "France" and "très" due to a bug in laminas-mail
+            'name'  => '01-Screenshot-2018-4-12 Observatoire - Francetrès haut débit.png',
+            'expected'  => '01-screenshot-2018-4-12-observatoire-francetres-haut-debit.png',
+         ], [
+            'name'  => '01-test.JPG',
+            'expected'  => '01-test.JPG',
+         ], [
+            'name'  => '15-image001.png',
+            'expected'  => '15-image001.png',
+         ], [
+            'name'  => '18-blank.gif',
+            'expected'  => '18-blank.gif',
+         ], [
+            'name'  => '19-ʂǷèɕɩɐɫ ȼɦâʁȿ.gif',
+            'expected'  => '19-secl-chas.gif',
+         ], [
+            'name'  => '20-specïal chars.gif',
+            'expected'  => '20-special-chars.gif',
+         ], [
+            'name'  => '24.1-长文件名，将导致内容处置标头中的连续行.txt',
+            'expected'  => '24.1-zhang-wen-jian-ming-jiang-dao-zhi-nei-rong-chu-zhi-biao-tou-zhong-de-lian-xu-xing.txt',
+         ], [
+            'name'  => '24.2-中国字符.txt',
+            'expected'  => '24.2-zhong-guo-zi-fu.txt',
+         ], [
+            'name'  => '25-New Text - Document.txt',
+            'expected'  => '25-new-text-document.txt',
+         ], [
+            'name'     => 'Έρευνα ικανοποίησης - Αιτήματα',
+            'expected' => 'ereuna-ikanopoieses-aitemata'
+         ], [
+            'name'     => 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nunc gravida, nisi vel scelerisque feugiat, tellus purus volutpat justo, vel aliquam nibh nibh sit amet risus. Aenean eget urna et felis molestie elementum nec sit amet magna. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vestibulum nec malesuada elit, non luctus mi. Aliquam quis velit justo. Donec id pulvinar nunc. Phasellus.txt',
+            'expected' => 'lorem-ipsum-dolor-sit-amet-consectetur-adipiscing-elit.-nunc-gravida-nisi-vel-scelerisque-feugiat-tellus-purus-volutpat-justo-vel-aliquam-.txt'
+         ]
+      ];
+   }
+
+   /**
+    * @dataProvider filenameProvider
+    */
+   public function testFilename($name, $expected) {
+      $this->string(\Toolbox::filename($name))->isIdenticalTo($expected);
+      $this->integer(strlen($expected))->isLessThanOrEqualTo(255);
    }
 
    public function dataGetSize() {
@@ -378,6 +432,44 @@ class Toolbox extends \GLPITestCase {
       $this->string(\Toolbox::sodiumDecrypt(''))->isEmpty();
    }
 
+   /**
+    * Test invalid content. If not handled correctly, following sodium exception would be raised and fail the test.
+    * "SodiumException: public nonce size should be SODIUM_CRYPTO_AEAD_XCHACHA20POLY1305_IETF_NPUBBYTES bytes"
+    */
+   public function testSodiumDecryptInvalid() {
+      $result = null;
+
+      $this->when(
+         function () use (&$result) {
+            $result = \Toolbox::sodiumDecrypt('not a valid value');
+         }
+      )->error
+         ->withType(E_USER_WARNING)
+         ->withMessage('Unable to extract nonce from content. It may not have been crypted with sodium functions.')
+         ->exists();
+
+      $this->string($result)->isEmpty();
+   }
+
+   /**
+    * Test content crypted with another key.
+    */
+   public function testSodiumDecryptBadKey() {
+      $result = null;
+
+      $this->when(
+         function () use (&$result) {
+            // 'test' string crypted with a valid key used just for that
+            $result = \Toolbox::sodiumDecrypt('CUdPSEgzKroDOwM1F8lbC8WDcQUkGCxIZpdTEpp5W/PLSb70WmkaKP0Q7QY=');
+         }
+      )->error
+         ->withType(E_USER_WARNING)
+         ->withMessage('Unable to decrypt content. It may have been crypted with another key.')
+         ->exists();
+
+      $this->string($result)->isEmpty();
+   }
+
    protected function cleanProvider() {
       return [
          ['mystring', 'mystring', null, 15, 0.56, false],
@@ -407,10 +499,34 @@ class Toolbox extends \GLPITestCase {
 
    protected function cleanHtmlProvider() {
       $dataset = $this->cleanProvider();
+
+      // nested list should be preserved
       $dataset[] = [
-         ['<div>Here a list example: <pre>&lt;ul&gt;&lt;li&gt;one&lt;/li&gt;&lt;li&gt;two&lt;/li&gt;&lt;/ul&gt;</pre></div>'],
-         ['&lt;div&gt;Here a list example: &lt;pre&gt;&lt;ul&gt;&lt;li&gt;one&lt;/li&gt;&lt;li&gt;two&lt;/li&gt;&lt;/ul&gt;&lt;/pre&gt;']
+         '<div>Here a list example: <ul><li>one, with nested<ul><li>nested list</li></ul></li><li>two</li></ul></div>',
+         '&lt;div&gt;Here a list example: &lt;ul&gt;&lt;li&gt;one, with nested&lt;ul&gt;&lt;li&gt;nested list&lt;/li&gt;&lt;/ul&gt;&lt;/li&gt;&lt;li&gt;two&lt;/li&gt;&lt;/ul&gt;'
       ];
+      // on* attributes are not allowed
+      $dataset[] = [
+         '<img src="test.png" alt="test image" />',
+         '&lt;img src="test.png" alt="test image" onerror="javascript:alert(document.cookie);" /&gt;'
+      ];
+      $dataset[] = [
+         '<img src="test.png" alt="test image" />',
+         '&lt;img src="test.png" alt="test image" onload="javascript:alert(document.cookie);" /&gt;'
+      ];
+      // iframes should not be preserved by default
+      $dataset[] = [
+         'Here is an iframe: ', 'Here is an iframe: &lt;iframe src="http://glpi-project.org/"&gt;&lt;/iframe&gt;'
+      ];
+      // HTML comments should be removed
+      $dataset[] = [
+         '<p>Legit text</p>', '&lt;p&gt;Legit&lt;!-- This is an HTML comment --&gt; text&lt;/p&gt;'
+      ];
+      // CDATA should be removed
+      $dataset[] = [
+         '<p>Legit text</p>', '&lt;p&gt;Legit&lt;![CDATA[Some CDATA]]&gt; text&lt;/p&gt;'
+      ];
+
       return $dataset;
    }
 
@@ -891,4 +1007,63 @@ class Toolbox extends \GLPITestCase {
       $this->boolean(\Toolbox::isAPIDeprecated($class))->isEqualTo($is_deprecated);
    }
 
+   protected function urlProvider() {
+      return [
+         ['http://localhost', true],
+         ['https://localhost', true],
+         ['https;//localhost', false],
+         ['https://glpi-project.org', true],
+         ['https://glpi+project-org', false],
+         [' http://my.host.com', false],
+         ['http://my.host.com', true],
+         ['http://my.host.com/', true],
+         ['http://my.host.com/glpi/', true],
+         ['http://my.host.com /', false],
+         ['http://localhost:8080', true],
+         ['http://localhost:8080/', true],
+         ['http://my.host.com:8080/glpi/', true],
+         ['http://my.host.com:8080 /', false],
+         ['http://my.host.com: 8080/', false],
+         ['http://my.host.com :8080/', false],
+         ['http://helpdesk.global.glpi-project.org', true],
+         ['http://dev.helpdesk.global.glpi-project.org', true],
+         ['http://127.0.0.1', true],
+         ['http://127.0.0.1/glpi', true],
+         ['http://127.0.0.1:8080', true],
+         ['http://127.0.0.1:8080/', true],
+         ['http://127.0.0.1 :8080/', false],
+         ['http://127.0.0.1 :8080 /', false],
+         ['http://::1', true],
+         ['http://::1/glpi', true],
+         ['http://::1:8080/', true],
+         ['http://::1:8080/', true],
+         ['HTTPS://::1:8080/', true],
+         ['www.my.host.com', false],
+         ['127.0.0.1', false],
+         ['::1', false],
+         ['http://my.host.com/subdir/glpi/', true],
+         ['http://my.host.com/~subdir/glpi/', true],
+         ['https://localhost<', false],
+         ['https://localhost"', false],
+         ['https://localhost\'', false],
+      ];
+   }
+
+   /**
+    * @dataProvider urlProvider
+    */
+   public function testIsValidWebUrl($url, $result) {
+      $this->boolean(\Toolbox::isValidWebUrl($url))->isIdenticalTo((bool)$result, $url);
+   }
+
+   public function testDeprecated() {
+      $this->when(
+         function () {
+            \Toolbox::deprecated('Calling this function is deprecated');
+         }
+      )->error()
+         ->withType(E_USER_DEPRECATED)
+         ->withMessage('Calling this function is deprecated')
+         ->exists();
+   }
 }

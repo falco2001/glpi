@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -661,6 +661,16 @@ $tables['glpi_crontasks'] = [
       'id'            => 37,
       'itemtype'      => 'Glpi\\Marketplace\\Controller',
       'name'          => 'checkAllUpdates',
+      'frequency'     => 86400,
+      'param'         => null,
+      'state'         => 1,
+      'mode'          => 2,
+      'lastrun'       => null,
+      'logs_lifetime' => 30,
+   ], [
+      'id'            => 38,
+      'itemtype'      => 'Domain',
+      'name'          => 'DomainsAlert',
       'frequency'     => 86400,
       'param'         => null,
       'state'         => 1,
@@ -2092,6 +2102,8 @@ $tables['glpi_entities'] = [
       'autofill_delivery_date'               => 0,
       'autofill_order_date'                  => 0,
       'tickettemplates_id'                   => 1,
+      'changetemplates_id'                   => 1,
+      'problemtemplates_id'                  => 1,
       'entities_id_software'                 => -10,
       'default_contract_alert'               => 0,
       'default_infocom_alert'                => 0,
@@ -7746,7 +7758,7 @@ $tables['glpi_rulecriterias'] = [
    ], [
       'id'        => 12,
       'rules_id'  => 7,
-      'criteria'  => 'users_locations',
+      'criteria'  => '_locations_id_of_requester',
       'condition' => 8,
       'pattern'   => 1,
    ], [

@@ -6,6 +6,7 @@ on:
 
 jobs:
   build:
+    if: github.repository == 'glpi-project/glpi'
     name: "Build ${{ matrix.branch }}"
     runs-on: "ubuntu-latest"
     strategy:
@@ -17,7 +18,7 @@ jobs:
           - {branch: "9.5/bugfixes", php-version: "7.2"}
     services:
       app:
-        image: "glpi/githubactions-php:${{ matrix.php-version }}"
+        image: "ghcr.io/glpi-project/githubactions-php:${{ matrix.php-version }}"
         options: >-
           --volume /glpi:/var/glpi
     steps:
@@ -36,7 +37,7 @@ jobs:
         run: |
           REF_NAME=$(echo ${{ matrix.branch }} | sed -E 's|/|-|')
           SHA=$(git rev-parse --short HEAD)
-          echo "::set-env name=release_name::$REF_NAME.$SHA"
+          echo "release_name=$REF_NAME.$SHA" >> $GITHUB_ENV
       - name: "Build"
         run: |
           echo "Y" | docker exec --interactive ${{ job.services.app.id }} tools/make_release.sh . ${{ env.release_name }}

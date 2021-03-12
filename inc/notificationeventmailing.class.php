@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -151,7 +151,7 @@ class NotificationEventMailing extends NotificationEventAbstract implements Noti
             ];
             if ($item instanceof CommonITILObject) {
                $item->getFromDB($current->fields['items_id']);
-               $doc_crit = $item->getAssociatedDocumentsCriteria();
+               $doc_crit = $item->getAssociatedDocumentsCriteria(true);
                if ($is_html) {
                   // Remove documents having "NO_TIMELINE" position if mail is HTML, as
                   // these documents corresponds to inlined images.
@@ -179,6 +179,7 @@ class NotificationEventMailing extends NotificationEventAbstract implements Noti
             $documents_to_attach = $documents_ids; // Attach all documents
          } else {
             $mmail->Body = '';
+            $current->fields['body_html'] = Toolbox::doubleEncodeEmails($current->fields['body_html']);
             $current->fields['body_html'] = Html::entity_decode_deep($current->fields['body_html']);
 
             $inline_docs = [];

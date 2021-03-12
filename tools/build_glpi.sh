@@ -2,7 +2,7 @@
 # /**
 #  * ---------------------------------------------------------------------
 #  * GLPI - Gestionnaire Libre de Parc Informatique
-#  * Copyright (C) 2015-2020 Teclib' and contributors.
+#  * Copyright (C) 2015-2021 Teclib' and contributors.
 #  *
 #  * http://glpi-project.org
 #  *
@@ -28,7 +28,7 @@
 #  * You should have received a copy of the GNU General Public License
 #  * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
 #  * ---------------------------------------------------------------------
-#  */
+# */
 
 SCRIPT_DIR=$(dirname $0)
 WORKING_DIR=$(readlink -f "$SCRIPT_DIR/..")
@@ -76,22 +76,10 @@ dev_nodes=(
     "tests"
     "tools"
     "vendor/bin"
+    "webpack.config.js"
 )
 for node in "${dev_nodes[@]}"
 do
     rm -rf $WORKING_DIR/$node
 done
 find $WORKING_DIR/pics/ -depth -type f -iname "*.eps" -exec rm -rf {} \;
-
-# Remove useless files and directories in vendor subdirs
-vendor_dirs=( "doc*" "example*" "test*" )
-for directory in "${vendor_dirs[@]}"
-do
-    find $WORKING_DIR/vendor -depth -type d -iname $directory -exec rm -rf {} \;
-done
-vendor_filenames=( "build.xml" "changelog.md" "composer.json" "phpunit.xml.dist" "readme.md" )
-for filename in "${vendor_filenames[@]}"
-do
-    find $WORKING_DIR/vendor -depth -type f -iname $filename -exec rm -rf {} \;
-done
-

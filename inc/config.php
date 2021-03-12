@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -118,6 +118,10 @@ if (!file_exists(GLPI_CONFIG_DIR . "/config_db.php")) {
 
    if (isset($_SESSION["glpiroot"]) && $CFG_GLPI["root_doc"]!=$_SESSION["glpiroot"]) {
       Html::redirect($_SESSION["glpiroot"]);
+   }
+
+   if (!isset($_SESSION["glpilanguage"])) {
+      $_SESSION["glpilanguage"] = Session::getPreferredLanguage();
    }
 
    // Override cfg_features by session value

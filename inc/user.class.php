@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -192,15 +192,7 @@ class User extends CommonDBTM {
          Session::start();
          $_SESSION["glpiID"]                      = $this->fields['id'];
          $_SESSION["glpi_use_mode"]               = Session::NORMAL_MODE;
-         $_SESSION["glpiactive_entity"]           = $entities_id;
-         $_SESSION["glpiactive_entity_recursive"] = $is_recursive;
-         if ($is_recursive) {
-            $entities = getSonsOf("glpi_entities", $entities_id);
-         } else {
-            $entities = [$entities_id];
-         }
-         $_SESSION['glpiactiveentities']        = $entities;
-         $_SESSION['glpiactiveentities_string'] = "'".implode("', '", $entities)."'";
+         Session::loadEntity($entities_id, $is_recursive);
          $this->computePreferences();
          foreach ($CFG_GLPI['user_pref_field'] as $field) {
             if (isset($this->fields[$field])) {
@@ -656,6 +648,7 @@ class User extends CommonDBTM {
       $this->syncLdapGroups();
       $this->syncDynamicEmails();
 
+      $this->applyGroupsRules();
       $rulesplayed = $this->applyRightRules();
       $picture     = $this->syncLdapPhoto();
 
@@ -678,6 +671,7 @@ class User extends CommonDBTM {
             $profile                   = Profile::getDefault();
             // Default right as dynamic. If dynamic rights are set it will disappear.
             $affectation['is_dynamic'] = 1;
+            $affectation['is_default_profile'] = 1;
          }
 
          if ($profile) {
@@ -915,6 +909,7 @@ class User extends CommonDBTM {
       $this->updateUserEmails();
       $this->syncLdapGroups();
       $this->syncDynamicEmails();
+      $this->applyGroupsRules();
       $this->applyRightRules();
 
       if (in_array('password', $this->updates)) {
@@ -1048,6 +1043,27 @@ class User extends CommonDBTM {
             unset($this->input["_ldap_rules"]);
 
             $return = true;
+         } else if (count($dynamic_profiles) == 1) {
+            $dynamic_profile = reset($dynamic_profiles);
+
+            // If no rule applied and only one dynamic profile found, check if
+            // it is the default profile
+            if ($dynamic_profile['is_default_profile'] == true) {
+               $default_profile = Profile::getDefault();
+
+               // Remove from to be deleted list
+               $dynamic_profiles = [];
+
+               // Update profile if need to match the current default profile
+               if ($dynamic_profile['profiles_id'] !== $default_profile) {
+                  $pu = new Profile_User();
+                  $dynamic_profile['profiles_id'] = $default_profile;
+                  $pu->add($dynamic_profile);
+                  $pu->delete([
+                     'id' => $dynamic_profile['id']
+                  ]);
+               }
+            }
          }
 
          // Delete old dynamic profiles
@@ -1784,7 +1800,8 @@ class User extends CommonDBTM {
       //Get the result of the search as an array
       $info = AuthLDAP::get_entries_clean($ds, $sr);
       //Browse all the groups
-      for ($i = 0; $i < count($info); $i++) {
+      $info_count = count($info);
+      for ($i = 0; $i < $info_count; $i++) {
          //Get the cn of the group and add it to the list of groups
          if (isset($info[$i]["dn"]) && ($info[$i]["dn"] != '')) {
             $listgroups[$i] = $info[$i]["dn"];
@@ -2059,27 +2076,26 @@ class User extends CommonDBTM {
          $formtitle .= "<a class='pointer far fa-address-card fa-lg' target='_blank' href='".
                        User::getFormURLWithID($ID)."&amp;getvcard=1' title='".__s('Download user VCard').
                        "'><span class='sr-only'>". __('Vcard')."</span></a>";
-      }
+         if (Session::canImpersonate($ID)) {
+            $formtitle .= '<button type="button" class="pointer btn-linkstyled btn-impersonate" name="impersonate" value="1">'
+               . '<i class="fas fa-user-secret fa-lg" title="' . __s('Impersonate') . '"></i> '
+               . '<span class="sr-only">' . __s('Impersonate') . '</span>'
+               . '</button>';
 
-      if (Session::canImpersonate($ID)) {
-         $formtitle .= '<button type="button" class="pointer btn-linkstyled btn-impersonate" name="impersonate" value="1">'
-            . '<i class="fas fa-user-secret fa-lg" title="' . __s('Impersonate') . '"></i> '
-            . '<span class="sr-only">' . __s('Impersonate') . '</span>'
-            . '</button>';
-
-         // "impersonate" button type is set to "button" on form display to prevent it to be used
-         // by default (as it is the first found in current form) when pressing "enter" key.
-         // When clicking it, switch to "submit" type to make it submit current user form.
-         $impersonate_js = <<<JAVASCRIPT
-            (function($) {
-               $('button[type="button"][name="impersonate"]').click(
-                  function () {
-                     $(this).attr('type', 'submit');
-                  }
-               );
-            })(jQuery);
+            // "impersonate" button type is set to "button" on form display to prevent it to be used
+            // by default (as it is the first found in current form) when pressing "enter" key.
+            // When clicking it, switch to "submit" type to make it submit current user form.
+            $impersonate_js = <<<JAVASCRIPT
+               (function($) {
+                  $('button[type="button"][name="impersonate"]').click(
+                     function () {
+                        $(this).attr('type', 'submit');
+                     }
+                  );
+               })(jQuery);
 JAVASCRIPT;
-         $formtitle .= Html::scriptBlock($impersonate_js);
+            $formtitle .= Html::scriptBlock($impersonate_js);
+         }
       }
 
       $options['formtitle']   = $formtitle;
@@ -2240,7 +2256,7 @@ JAVASCRIPT;
 
       $phonerand = mt_rand();
       echo "<tr class='tab_bg_1'>";
-      echo "<td><label for='textfield_phone$phonerand'>" .  __('Phone') . "</label></td><td>";
+      echo "<td><label for='textfield_phone$phonerand'>" .  Phone::getTypeName(1) . "</label></td><td>";
       Html::autocompletionTextField($this, "phone", ['rand' => $phonerand]);
       echo "</td>";
       //Authentications information : auth method used and server used
@@ -2305,7 +2321,7 @@ JAVASCRIPT;
       echo "<tr class='tab_bg_1'>";
       if (!empty($ID)) {
          $locrand = mt_rand();
-         echo "<td><label for='dropdown_locations_id$locrand'>" . __('Location') . "</label></td><td>";
+         echo "<td><label for='dropdown_locations_id$locrand'>" . Location::getTypeName(1) . "</label></td><td>";
          $entities = $this->getEntities();
          if (count($entities) <= 0) {
             $entities = -1;
@@ -2326,13 +2342,13 @@ JAVASCRIPT;
          echo "</td></tr>";
          $profilerand = mt_rand();
          echo "<tr class='tab_bg_1'>";
-         echo "<td><label for='dropdown__profiles_id$profilerand'>" .  __('Profile') . "</label></td><td>";
+         echo "<td><label for='dropdown__profiles_id$profilerand'>" .  Profile::getTypeName(1) . "</label></td><td>";
          Profile::dropdownUnder(['name'  => '_profiles_id',
                                  'rand'  => $profilerand,
                                  'value' => Profile::getDefault()]);
 
          $entrand = mt_rand();
-         echo "</td><td><label for='dropdown__entities_id$entrand'>" .  __('Entity') . "</label></td><td>";
+         echo "</td><td><label for='dropdown__entities_id$entrand'>" .  Entity::getTypeName(1) . "</label></td><td>";
          Entity::dropdown(['name'                => '_entities_id',
                            'display_emptychoice' => false,
                            'rand'                => $entrand,
@@ -2470,7 +2486,7 @@ JAVASCRIPT;
       echo getUserName($userid);
       echo "</td>";
       echo "<td class='b'  width='20%'>";
-      echo __('Phone');
+      echo Phone::getTypeName(1);
       echo "</td><td width='30%'>";
       echo $user->getField('phone');
       echo "</td>";
@@ -2491,14 +2507,14 @@ JAVASCRIPT;
 
       echo "<tr class='tab_bg_1'>";
       echo "<td class='b'>";
-      echo __('Email');
+      echo _n('Email', 'Emails', 1);
       echo "</td><td>";
       echo $user->getDefaultEmail();
       echo "</td></tr>";
 
       echo "<tr class='tab_bg_1'>";
       echo "<td class='b'>";
-      echo __('Location');
+      echo Location::getTypeName(1);
       echo "</td><td>";
       echo Dropdown::getDropdownName('glpi_locations', $user->getField('locations_id'));
       echo "</td>";
@@ -2695,7 +2711,7 @@ JAVASCRIPT;
          }
 
          $phonerand = mt_rand();
-         echo "<tr class='tab_bg_1'><td><label for='textfield_phone$phonerand'>" .  __('Phone') . "</label></td><td>";
+         echo "<tr class='tab_bg_1'><td><label for='textfield_phone$phonerand'>" .  Phone::getTypeName(1) . "</label></td><td>";
 
          if ($extauth
              && isset($authtype['phone_field']) && !empty($authtype['phone_field'])) {
@@ -2774,7 +2790,7 @@ JAVASCRIPT;
          echo "</td><td colspan='2'></td></tr>";
 
          $locrand = mt_rand();
-         echo "<tr class='tab_bg_1'><td><label for='dropdown_locations_id$locrand'>" . __('Location') . "</label></td><td>";
+         echo "<tr class='tab_bg_1'><td><label for='dropdown_locations_id$locrand'>" . Location::getTypeName(1) . "</label></td><td>";
          Location::dropdown(['value'  => $this->fields['locations_id'],
                              'rand'   => $locrand,
                              'entity' => $entities]);
@@ -3124,7 +3140,7 @@ JAVASCRIPT;
          'id'                 => '6',
          'table'              => $this->getTable(),
          'field'              => 'phone',
-         'name'               => __('Phone'),
+         'name'               => Phone::getTypeName(1),
          'datatype'           => 'string',
          'autocomplete'       => true,
       ];
@@ -3151,7 +3167,7 @@ JAVASCRIPT;
          'id'                 => '13',
          'table'              => 'glpi_groups',
          'field'              => 'completename',
-         'name'               => _n('Group', 'Groups', Session::getPluralNumber()),
+         'name'               => Group::getTypeName(Session::getPluralNumber()),
          'forcegroupby'       => true,
          'datatype'           => 'itemlink',
          'massiveaction'      => false,
@@ -3253,8 +3269,8 @@ JAVASCRIPT;
          'id'                 => '20',
          'table'              => 'glpi_profiles',
          'field'              => 'name',
-         'name'               => sprintf(__('%1$s (%2$s)'), _n('Profile', 'Profiles', Session::getPluralNumber()),
-                                                 _n('Entity', 'Entities', 1)),
+         'name'               => sprintf(__('%1$s (%2$s)'), Profile::getTypeName(Session::getPluralNumber()),
+                                                 Entity::getTypeName(1)),
          'forcegroupby'       => true,
          'massiveaction'      => false,
          'datatype'           => 'dropdown',
@@ -3309,8 +3325,8 @@ JAVASCRIPT;
          'table'              => 'glpi_entities',
          'linkfield'          => 'entities_id',
          'field'              => 'completename',
-         'name'               => sprintf(__('%1$s (%2$s)'), _n('Entity', 'Entities', Session::getPluralNumber()),
-                                                 _n('Profile', 'Profiles', 1)),
+         'name'               => sprintf(__('%1$s (%2$s)'), Entity::getTypeName(Session::getPluralNumber()),
+                                                 Profile::getTypeName(1)),
          'forcegroupby'       => true,
          'datatype'           => 'dropdown',
          'massiveaction'      => false,
@@ -3924,25 +3940,27 @@ JAVASCRIPT;
 
       // Default values
       $p = [
-         'name'             => 'users_id',
-         'value'            => '',
-         'values'           => [],
-         'right'            => 'id',
-         'all'              => 0,
-         'on_change'        => '',
-         'comments'         => 1,
-         'width'            => '80%',
-         'entity'           => -1,
-         'entity_sons'      => false,
-         'used'             => [],
-         'ldap_import'      => false,
-         'toupdate'         => '',
-         'rand'             => mt_rand(),
-         'display'          => true,
-         '_user_index'      => 0,
-         'specific_tags'    => [],
-         'url'              => $CFG_GLPI['root_doc']."/ajax/getDropdownUsers.php",
-         'inactive_deleted' => 0,
+         'name'                => 'users_id',
+         'value'               => '',
+         'values'              => [],
+         'right'               => 'id',
+         'all'                 => 0,
+         'display_emptychoice' => true,
+         'placeholder'         => '',
+         'on_change'           => '',
+         'comments'            => 1,
+         'width'               => '80%',
+         'entity'              => -1,
+         'entity_sons'         => false,
+         'used'                => [],
+         'ldap_import'         => false,
+         'toupdate'            => '',
+         'rand'                => mt_rand(),
+         'display'             => true,
+         '_user_index'         => 0,
+         'specific_tags'       => [],
+         'url'                 => $CFG_GLPI['root_doc'] . "/ajax/getDropdownUsers.php",
+         'inactive_deleted'    => 0,
       ];
 
       if (is_array($options) && count($options)) {
@@ -3994,19 +4012,27 @@ JAVASCRIPT;
          }
       }
 
-      $field_id = Html::cleanId("dropdown_".$p['name'].$p['rand']);
-      $param    = ['value'               => $p['value'],
-                        'values'              => $p['values'],
-                        'valuename'           => $default,
-                        'valuesnames'         => $valuesnames,
-                        'width'               => $p['width'],
-                        'all'                 => $p['all'],
-                        'right'               => $p['right'],
-                        'on_change'           => $p['on_change'],
-                        'used'                => $p['used'],
-                        'inactive_deleted'    => $p['inactive_deleted'],
-                        'entity_restrict'     => (is_array($p['entity']) ? json_encode(array_values($p['entity'])) : $p['entity']),
-                        'specific_tags'       => $p['specific_tags']];
+      $field_id = Html::cleanId("dropdown_" . $p['name'] . $p['rand']);
+      $param    = [
+         'value'               => $p['value'],
+         'values'              => $p['values'],
+         'valuename'           => $default,
+         'valuesnames'         => $valuesnames,
+         'width'               => $p['width'],
+         'all'                 => $p['all'],
+         'display_emptychoice' => $p['display_emptychoice'],
+         'placeholder'         => $p['placeholder'],
+         'right'               => $p['right'],
+         'on_change'           => $p['on_change'],
+         'used'                => $p['used'],
+         'inactive_deleted'    => $p['inactive_deleted'],
+         'entity_restrict'     => ($entity_restrict = (is_array($p['entity']) ? json_encode(array_values($p['entity'])) : $p['entity'])),
+         'specific_tags'       => $p['specific_tags'],
+         '_idor_token'         => Session::getNewIDORToken(__CLASS__, [
+            'right'           => $p['right'],
+            'entity_restrict' => $entity_restrict,
+         ]),
+      ];
 
       $output   = Html::jsAjaxDropdown($p['name'], $field_id,
                                        $p['url'],
@@ -4036,8 +4062,10 @@ JAVASCRIPT;
                                             'link'      => $user["link"],
                                             'linkid'    => $link_id]);
 
-         $paramscomment = ['value' => '__VALUE__',
-                                'table' => "glpi_users"];
+         $paramscomment = [
+            'value'    => '__VALUE__',
+            'itemtype' => User::getType()
+         ];
 
          if ($view_users) {
             $paramscomment['withlink'] = $link_id;
@@ -4252,8 +4280,8 @@ JAVASCRIPT;
       }
 
       echo "<div class='spaced'><table class='tab_cadre_fixehov'>";
-      $header = "<tr><th>".__('Type')."</th>";
-      $header .= "<th>".__('Entity')."</th>";
+      $header = "<tr><th>"._n('Type', 'Types', 1)."</th>";
+      $header .= "<th>".Entity::getTypeName(1)."</th>";
       $header .= "<th>".__('Name')."</th>";
       $header .= "<th>".__('Serial number')."</th>";
       $header .= "<th>".__('Inventory number')."</th>";
@@ -4332,8 +4360,8 @@ JAVASCRIPT;
       if (count($group_where)) {
          echo "<div class='spaced'><table class='tab_cadre_fixehov'>";
          $header = "<tr>".
-               "<th>".__('Type')."</th>".
-               "<th>".__('Entity')."</th>".
+               "<th>"._n('Type', 'Types', 1)."</th>".
+               "<th>".Entity::getTypeName(1)."</th>".
                "<th>".__('Name')."</th>".
                "<th>".__('Serial number')."</th>".
                "<th>".__('Inventory number')."</th>".
@@ -4376,7 +4404,7 @@ JAVASCRIPT;
                   }
                   $linktype = "";
                   if (isset($groups[$data[$field_group]])) {
-                     $linktype = sprintf(__('%1$s = %2$s'), _n('Group', 'Groups', 1),
+                     $linktype = sprintf(__('%1$s = %2$s'), Group::getTypeName(1),
                                           $groups[$data[$field_group]]);
                   }
                   echo "<tr class='tab_bg_1'><td class='center'>$type_name</td>";
@@ -4947,7 +4975,7 @@ JAVASCRIPT;
       }
       echo "<div class='spaced'>";
       echo "<table class='tab_cadre_fixe'>";
-      echo "<tr><th colspan='4'>".__('LDAP directory')."</th></tr>";
+      echo "<tr><th colspan='4'>".AuthLDAP::getTypeName(1)."</th></tr>";
 
       echo "<tr class='tab_bg_2'><td>".__('User DN')."</td>";
       echo "<td>".$this->fields['user_dn']."</td></tr>\n";
@@ -4995,7 +5023,7 @@ JAVASCRIPT;
    function getUnicityFieldsToDisplayInErrorMessage() {
 
       return ['id'          => __('ID'),
-                   'entities_id' => __('Entity')];
+                   'entities_id' => Entity::getTypeName(1)];
    }
 
 
@@ -5122,7 +5150,7 @@ JAVASCRIPT;
                     'name'       => array_keys($passwords)];
 
       foreach ($DB->request('glpi_users', $crit) as $data) {
-         if (Auth::checkPassword($passwords[$data['name']], $data['password'])) {
+         if (Auth::checkPassword($passwords[strtolower($data['name'])], $data['password'])) {
             $default_password_set[] = $data['name'];
          }
       }
@@ -5558,8 +5586,73 @@ JAVASCRIPT;
       return $expiration_time < time();
    }
 
+   public static function getFriendlyNameSearchCriteria(string $filter): array {
+      $table     = self::getTable();
+      $login     = DBmysql::quoteName("$table.name");
+      $firstname = DBmysql::quoteName("$table.firstname");
+      $lastname  = DBmysql::quoteName("$table.realname");
+
+      $filter = strtolower($filter);
+      $filter_no_spaces = str_replace(" ", "", $filter);
+
+      return [
+         'OR' => [
+            ['RAW' => ["LOWER($login)" => ['LIKE', "%$filter%"]]],
+            ['RAW' => ["LOWER(REPLACE(CONCAT($firstname, $lastname), ' ', ''))" => ['LIKE', "%$filter_no_spaces%"]]],
+            ['RAW' => ["LOWER(REPLACE(CONCAT($lastname, $firstname), ' ', ''))" => ['LIKE', "%$filter_no_spaces%"]]],
+         ]
+      ];
+   }
+
+   public static function getFriendlyNameFields(string $alias = "name") {
+      $config = Config::getConfigurationValues('core');
+      if ($config['names_format'] == User::FIRSTNAME_BEFORE) {
+         $first = "firstname";
+         $second = "realname";
+      } else {
+         $first = "realname";
+         $second = "firstname";
+      }
+
+      $table  = self::getTable();
+      $first  = DB::quoteName("$table.$first");
+      $second = DB::quoteName("$table.$second");
+      $alias  = DB::quoteName($alias);
+      $name   = DB::quoteName(self::getNameField());
+
+      return new QueryExpression("IF(
+            $first <> '' && $second <> '',
+            CONCAT($first, ' ', $second),
+            $name
+         ) AS $alias"
+      );
+   }
 
    static function getIcon() {
       return "fas fa-user";
+   }
+
+   /**
+    * Add groups stored in "_ldap_rules/groups_id" special input
+    */
+   public function applyGroupsRules() {
+      if (!isset($this->input["_ldap_rules"]['groups_id'])) {
+         return;
+      }
+
+      $group_ids = array_unique($this->input["_ldap_rules"]['groups_id']);
+      foreach ($group_ids as $group_id) {
+         $group_user = new Group_User();
+
+         $data = [
+            'groups_id' => $group_id,
+            'users_id'  => $this->getId()
+         ];
+
+         if (!$group_user->getFromDBByCrit($data)) {
+            $group_user->add($data);
+         }
+
+      }
    }
 }

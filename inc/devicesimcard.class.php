@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -49,7 +49,7 @@ class DeviceSimcard extends CommonDevice {
          [
             [
                'name'  => 'devicesimcardtypes_id',
-               'label' => __('Type'),
+               'label' => _n('Type', 'Types', 1),
                'type'  => 'dropdownValue'
             ],
             [
@@ -72,8 +72,8 @@ class DeviceSimcard extends CommonDevice {
 
       $tab[] = [
             'id'                 => '12',
-            'table'              => 'glpi_devicesimcardvoltages',
-            'field'              => 'name',
+            'table'              => $this->getTable(),
+            'field'              => 'voltage',
             'name'               => __('Voltage'),
             'datatype'           => 'string',
             'autocomplete'       => true,
@@ -83,7 +83,7 @@ class DeviceSimcard extends CommonDevice {
             'id'                 => '13',
             'table'              => 'glpi_devicesimcardtypes',
             'field'              => 'name',
-            'name'               => __('Type'),
+            'name'               => _n('Type', 'Types', 1),
             'datatype'           => 'dropdown'
       ];
 

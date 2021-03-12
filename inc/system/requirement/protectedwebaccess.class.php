@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -84,7 +84,7 @@ class ProtectedWebAccess extends AbstractRequirement {
          return;
       }
 
-      $oldhand = set_error_handler(function($errno, $errmsg, $filename, $linenum, $vars){return true;});
+      $oldhand = set_error_handler(function($errno, $errmsg, $filename, $linenum){return true;});
       $oldlevel = error_reporting(0);
 
       //create a context to set timeout

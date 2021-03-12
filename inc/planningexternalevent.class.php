@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -228,7 +228,7 @@ JAVASCRIPT;
       echo "</td>";
       echo "</tr>";
 
-      echo "<tr class='tab_bg_2'><td colspan='2'>".__('User')."</td>";
+      echo "<tr class='tab_bg_2'><td colspan='2'>".User::getTypeName(1)."</td>";
       echo "<td colspan='2'>";
       User::dropdown([
          'name'          => 'users_id',
@@ -298,7 +298,7 @@ JAVASCRIPT;
       echo "</td>";
       echo "</tr>";
 
-      echo "<tr class='tab_bg_2'><td  colspan='2'>".__('Calendar')."</td>";
+      echo "<tr class='tab_bg_2'><td  colspan='2'>"._n('Calendar', 'Calendars', 1)."</td>";
       echo "<td>";
       Planning::showAddEventClassicForm([
          'items_id'  => $this->fields['id'],
@@ -442,7 +442,7 @@ JAVASCRIPT;
 
       $vcomp = $vcalendar->getBaseComponent();
 
-      $input = $this->getCommonInputFromVcomponent($vcomp);
+      $input = $this->getCommonInputFromVcomponent($vcomp, $this->isNewItem());
 
       $input['text'] = $input['content'];
       unset($input['content']);

@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -62,7 +62,7 @@ class DeviceProcessor extends CommonDevice {
                                      'label' => __('Number of threads'),
                                      'type'  => 'integer'],
                                ['name'  => 'deviceprocessormodels_id',
-                                     'label' => __('Model'),
+                                     'label' => _n('Model', 'Models', 1),
                                      'type'  => 'dropdownValue']
                            ]);
    }
@@ -109,7 +109,7 @@ class DeviceProcessor extends CommonDevice {
          'id'                 => '15',
          'table'              => 'glpi_deviceprocessormodels',
          'field'              => 'name',
-         'name'               => __('Model'),
+         'name'               => _n('Model', 'Models', 1),
          'datatype'           => 'dropdown'
       ];
 
@@ -136,24 +136,15 @@ class DeviceProcessor extends CommonDevice {
 
 
    function prepareInputForAdd($input) {
-      return self::prepareInputForAddOrUpdate($input);
+      return $this->prepareInputForAddOrUpdate($input);
    }
 
 
-   /**
-    * @since 0.85
-    * @see CommonDropdown::prepareInputForUpdate()
-   **/
    function prepareInputForUpdate($input) {
-      return self::prepareInputForAddOrUpdate($input);
+      return $this->prepareInputForAddOrUpdate($input);
    }
 
 
-   /**
-    * @since 0.84
-    *
-    * @see CommonDevice::getHTMLTableHeader()
-   **/
    static function getHTMLTableHeader($itemtype, HTMLTableBase $base,
                                       HTMLTableSuperHeader $super = null,
                                       HTMLTableHeader $father = null, array $options = []) {
@@ -172,11 +163,6 @@ class DeviceProcessor extends CommonDevice {
    }
 
 
-   /**
-    * @since 0.84
-    *
-    * @see CommonDevice::getHTMLTableCellForItem()
-   **/
    function getHTMLTableCellForItem(HTMLTableRow $row = null, CommonDBTM $item = null,
                                     HTMLTableCell $father = null, array $options = []) {
 
@@ -194,13 +180,6 @@ class DeviceProcessor extends CommonDevice {
    }
 
 
-   /**
-    * Criteria used for import function
-    *
-    * @see CommonDevice::getImportCriteria()
-    *
-    * @since 0.84
-   **/
    function getImportCriteria() {
 
       return ['designation'          => 'equal',
@@ -217,7 +196,7 @@ class DeviceProcessor extends CommonDevice {
          'id'                 => '17',
          'table'              => 'glpi_deviceprocessors',
          'field'              => 'designation',
-         'name'               => __('Processor'),
+         'name'               => self::getTypeName(1),
          'forcegroupby'       => true,
          'usehaving'          => true,
          'massiveaction'      => false,
@@ -242,7 +221,8 @@ class DeviceProcessor extends CommonDevice {
          'joinparams'         => $main_joinparams,
          'computation'        =>
             'SUM(' . $DB->quoteName('TABLE.nbcores') . ') * COUNT(DISTINCT ' .
-            $DB->quoteName('TABLE.id') . ') / COUNT(*)'
+            $DB->quoteName('TABLE.id') . ') / COUNT(*)',
+         'nometa'             => true, // cannot GROUP_CONCAT a SUM
       ];
 
       $tab[] = [
@@ -257,7 +237,8 @@ class DeviceProcessor extends CommonDevice {
          'joinparams'         => $main_joinparams,
          'computation'        =>
             'SUM(' . $DB->quoteName('TABLE.nbthreads') . ') * COUNT(DISTINCT ' .
-            $DB->quoteName('TABLE.id') . ') / COUNT(*)'
+            $DB->quoteName('TABLE.id') . ') / COUNT(*)',
+         'nometa'             => true, // cannot GROUP_CONCAT a SUM
       ];
 
       $tab[] = [
@@ -274,7 +255,8 @@ class DeviceProcessor extends CommonDevice {
          'joinparams'         => $main_joinparams,
          'computation'        =>
             'SUM(' . $DB->quoteName('TABLE.frequency') . ') / COUNT(' .
-            $DB->quoteName('TABLE.id') . ')'
+            $DB->quoteName('TABLE.id') . ')',
+         'nometa'             => true, // cannot GROUP_CONCAT a SUM
       ];
 
       return $tab;

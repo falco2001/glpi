@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -55,7 +55,7 @@ class TicketFollowup implements DeprecatedInterface {
 
    public static function getCurrentAddInput(): array {
       return [
-         "users_id" => TU_USER,
+         "users_id" => getItemByTypeName('User', TU_USER, true),
          "itemtype" => "Ticket",
          "items_id" => getItemByTypeName('Ticket', '_ticket01', true),
          "content"  => "New followup"
@@ -65,7 +65,7 @@ class TicketFollowup implements DeprecatedInterface {
    public static function getDeprecatedAddInput(): array {
       return [
          'tickets_id' => getItemByTypeName('Ticket', '_ticket01', true),
-         'users_id'   => TU_USER,
+         'users_id'   => getItemByTypeName('User', TU_USER, true),
          'content'    => "Test insert deprecated",
       ];
    }

@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -131,14 +131,14 @@ class Calendar extends AbstractBackend {
       }
 
       $calendars = [];
-      foreach ($calendars_params as $key => $calendars_params) {
+      foreach ($calendars_params as $key => $calendar_data) {
          $calendars[] = [
              'id'                               => $key,
-             'uri'                              => $calendars_params['uri'],
-             'principaluri'                     => $calendars_params['principaluri'],
-             Property::DISPLAY_NAME             => $calendars_params['name'],
-             Property::CAL_COLOR                => $calendars_params['color'],
-             Property::CAL_DESCRIPTION          => $calendars_params['desc'],
+             'uri'                              => $calendar_data['uri'],
+             'principaluri'                     => $calendar_data['principaluri'],
+             Property::DISPLAY_NAME             => $calendar_data['name'],
+             Property::CAL_COLOR                => $calendar_data['color'],
+             Property::CAL_DESCRIPTION          => $calendar_data['desc'],
              Property::CAL_SUPPORTED_COMPONENTS => new SupportedCalendarComponentSet(
                 $CFG_GLPI['caldav_supported_components']
              ),

@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -237,7 +237,7 @@ class Link extends CommonDBTM {
          'id'                 => '80',
          'table'              => 'glpi_entities',
          'field'              => 'completename',
-         'name'               => __('Entity'),
+         'name'               => Entity::getTypeName(1),
          'massiveaction'      => false,
          'datatype'           => 'dropdown'
       ];
@@ -659,7 +659,7 @@ class Link extends CommonDBTM {
 
       if (!Session::isCron()
           && !isCommandLine() && isset($_SESSION['glpiactiveentities_string'])) {
-         $newtab['joinparams']['condition'] = getEntitiesRestrictCriteria('NEWTABLE');
+         $newtab['joinparams']['condition'] = getEntitiesRestrictRequest('AND', 'NEWTABLE');
       }
       $tab[] = $newtab;
 

@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -42,7 +42,7 @@ class Document_Item extends DbTestCase {
       $this->newTestedInstance();
       $this->array(
          $this->testedInstance->getForbiddenStandardMassiveAction()
-      )->isIdenticalTo(['update']);
+      )->isIdenticalTo(['clone', 'update']);
    }
 
    public function testPrepareInputForAdd() {

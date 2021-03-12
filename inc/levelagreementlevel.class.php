@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -98,9 +98,9 @@ abstract class LevelAgreementLevel extends RuleTicket {
 
       $tab[] = [
          'id'                 => '3',
-         'table'              => SLA::getTable(),
+         'table'              => static::getTable(),
          'field'              => 'name',
-         'name'               => SLA::getTypeName(),
+         'name'               => static::getTypeName(),
          'datatype'           => 'itemlink',
          'massiveaction'      => false
       ];
@@ -137,7 +137,7 @@ abstract class LevelAgreementLevel extends RuleTicket {
          'id'                 => '80',
          'table'              => Entity::getTable(),
          'field'              => 'completename',
-         'name'               => __('Entity'),
+         'name'               => Entity::getTypeName(1),
          'massiveaction'      => false,
          'datatype'           => 'dropdown'
       ];

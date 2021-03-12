@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -69,12 +69,14 @@ class ITILTemplate extends DbTestCase {
          ])
       )->isGreaterThan(0);
 
-      $this->integer(
-         (int)$mandat->add([
-            $mandat::$items_id   => $tpl_id,
-            'num'                => $mandat->getFieldNum($tpl, 'Location')
-         ])
-      )->isGreaterThan(0);
+      if ($itiltype === \Ticket::getType()) {
+         $this->integer(
+            (int)$mandat->add([
+               $mandat::$items_id   => $tpl_id,
+               'num'                => $mandat->getFieldNum($tpl, 'Location')
+            ])
+         )->isGreaterThan(0);
+      }
 
       $this->integer(
          (int)$mandat->add([
@@ -123,10 +125,7 @@ class ITILTemplate extends DbTestCase {
 
       $err_msg = 'Mandatory fields are not filled. Please correct: Title' .
          ($itiltype === \Ticket::getType() ? ', Location' : '') . ', Description';
-      $this->array($_SESSION['MESSAGE_AFTER_REDIRECT'])->isIdenticalTo(
-         [ERROR => [$err_msg]]
-      );
-      $_SESSION['MESSAGE_AFTER_REDIRECT'] = []; //reset
+      $this->hasSessionMessages(ERROR, [$err_msg]);
 
       $content['name']           = 'Title is required';
       $content['content']        = 'Description from template';
@@ -135,13 +134,12 @@ class ITILTemplate extends DbTestCase {
       $tid = (int)$object->add($content);
       $this->integer($tid)->isIdenticalTo(0);
 
-      $this->array($_SESSION['MESSAGE_AFTER_REDIRECT'])->isIdenticalTo([
-         ERROR => [
+      $this->hasSessionMessages(
+         ERROR, [
             'You cannot use predefined description verbatim',
             'Mandatory fields are not filled. Please correct: Description'
          ]
-      ]);
-      $_SESSION['MESSAGE_AFTER_REDIRECT'] = []; //reset
+      );
 
       $content['content'] = 'A content for our ' . $itiltype;
       $tid = (int)$object->add($content);

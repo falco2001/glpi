@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -35,6 +35,8 @@ if (!defined('GLPI_ROOT')) {
 }
 
 class PurgeLogs extends CommonDBTM {
+
+   static protected $notable = true;
 
    static function getTypeName($nb = 0) {
       return __('Logs purge');

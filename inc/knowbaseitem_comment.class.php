@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -359,7 +359,7 @@ class KnowbaseItem_Comment extends CommonDBTM {
       $form_title = ($edit === false ? __('New comment') : __('Edit comment'));
       $html .= "<tr class='tab_bg_2'><th colspan='3'>$form_title</th></tr>";
 
-      $html .= "<tr class='tab_bg_1'><td><label for='comment'>" . __('Comment') . "</label>
+      $html .= "<tr class='tab_bg_1'><td><label for='comment'>" . _n('Comment', 'Comments', 1) . "</label>
          &nbsp;<span class='red'>*</span></td><td>";
       $html .= "<textarea name='comment' id='comment' required='required'>{$content}</textarea>";
       $html .= "</td><td class='center'>";

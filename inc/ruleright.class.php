@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -121,6 +121,10 @@ class RuleRight extends Rule {
                         $output['groups_id'] = $action->fields["value"];
                         break;
 
+                     case 'specific_groups_id':
+                        $output["_ldap_rules"]['groups_id'][] = $action->fields["value"];
+                        break;
+
                      case "is_active" :
                         $output["is_active"] = $action->fields["value"];
                         break;
@@ -234,7 +238,7 @@ class RuleRight extends Rule {
 
          $criterias['LDAP_SERVER']['table']     = 'glpi_authldaps';
          $criterias['LDAP_SERVER']['field']     = 'name';
-         $criterias['LDAP_SERVER']['name']      = __('LDAP directory');
+         $criterias['LDAP_SERVER']['name']      = AuthLDAP::getTypeName(1);
          $criterias['LDAP_SERVER']['linkfield'] = '';
          $criterias['LDAP_SERVER']['type']      = 'dropdown';
          $criterias['LDAP_SERVER']['virtual']   = true;
@@ -262,13 +266,13 @@ class RuleRight extends Rule {
          $criterias['LOGIN']['virtual']         = true;
          $criterias['LOGIN']['id']              = 'login';
 
-         $criterias['GROUPS']['table']          = 'glpi_groups';
-         $criterias['GROUPS']['field']          = 'completename';
-         $criterias['GROUPS']['name']           = __('Group');
-         $criterias['GROUPS']['linkfield']      = '';
-         $criterias['GROUPS']['type']           = 'dropdown';
-         $criterias['GROUPS']['virtual']        = true;
-         $criterias['GROUPS']['id']             = 'groups';
+         $criterias['_groups_id']['table']      = 'glpi_groups';
+         $criterias['_groups_id']['field']      = 'completename';
+         $criterias['_groups_id']['name']       = Group::getTypeName(1);
+         $criterias['_groups_id']['linkfield']  = '';
+         $criterias['_groups_id']['type']       = 'dropdown';
+         $criterias['_groups_id']['virtual']    = true;
+         $criterias['_groups_id']['id']         = 'groups';
 
          //Dynamically add all the ldap criterias to the current list of rule's criterias
          $this->addSpecificCriteriasToArray($criterias);
@@ -304,7 +308,7 @@ class RuleRight extends Rule {
 
       $actions                                              = [];
 
-      $actions['entities_id']['name']                       = __('Entity');
+      $actions['entities_id']['name']                       = Entity::getTypeName(1);
       $actions['entities_id']['type']                       = 'dropdown';
       $actions['entities_id']['table']                      = 'glpi_entities';
 
@@ -350,12 +354,16 @@ class RuleRight extends Rule {
       $actions['_entities_id_default']['linkfield']         = 'entities_id';
       $actions['_entities_id_default']['type']              = 'dropdown';
 
+      $actions['specific_groups_id']['name'] = Group::getTypeName(Session::getPluralNumber());
+      $actions['specific_groups_id']['type'] = 'dropdown';
+      $actions['specific_groups_id']['table'] = 'glpi_groups';
+
       $actions['groups_id']['table']                        = 'glpi_groups';
       $actions['groups_id']['field']                        = 'name';
       $actions['groups_id']['name']                         = __('Default group');
       $actions['groups_id']['linkfield']                    = 'groups_id';
       $actions['groups_id']['type']                         = 'dropdown';
-      $actions['groups_id']['condition']                    = "`is_usergroup`='1'";
+      $actions['groups_id']['condition']                    = ['is_usergroup' => 1];
 
       $actions['_profiles_id_default']['table']             = 'glpi_profiles';
       $actions['_profiles_id_default']['field']             = 'name';

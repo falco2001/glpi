@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -166,12 +166,13 @@ class InstallCommand extends AbstractPluginCommand {
 
       // Fetch directory list
       $directories = [];
-      $plugins_directory = GLPI_ROOT . DIRECTORY_SEPARATOR . 'plugins';
-      $directory_handle  = opendir($plugins_directory);
-      while (false !== ($filename = readdir($directory_handle))) {
-         if (!in_array($filename, ['.svn', '.', '..'])
-             && is_dir($plugins_directory . DIRECTORY_SEPARATOR . $filename)) {
-             $directories[] = $filename;
+      foreach (PLUGINS_DIRECTORIES as $plugins_directory) {
+         $directory_handle  = opendir($plugins_directory);
+         while (false !== ($filename = readdir($directory_handle))) {
+            if (!in_array($filename, ['.svn', '.', '..'])
+                && is_dir($plugins_directory . DIRECTORY_SEPARATOR . $filename)) {
+                $directories[] = $filename;
+            }
          }
       }
 

@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -188,9 +188,6 @@ class Document extends CommonDBTM {
    }
 
 
-   /**
-    * @see CommonDBTM::prepareInputForAdd()
-   **/
    function prepareInputForAdd($input) {
       global $CFG_GLPI;
 
@@ -218,7 +215,7 @@ class Document extends CommonDBTM {
          }
          //TRANS: %1$s is Document, %2$s is item type, %3$s is item name
          $input["name"] = addslashes(Html::resume_text(sprintf(__('%1$s: %2$s'),
-                                                               __('Document'),
+                                                               Document::getTypeName(1),
                                                        sprintf(__('%1$s - %2$s'), $typename, $name)),
                                                        200));
          $create_from_item = true;
@@ -268,6 +265,15 @@ class Document extends CommonDBTM {
       if (isset($input['itemtype']) && ($input['itemtype'] == 'Ticket')
           && (!isset($input['documentcategories_id']) || ($input['documentcategories_id'] == 0))) {
          $input['documentcategories_id'] = $CFG_GLPI["documentcategories_id_forticket"];
+      }
+
+      if (isset($input['link']) && !empty($input['link']) && !Toolbox::isValidWebUrl($input['link'])) {
+         Session::addMessageAfterRedirect(
+            __('Invalid link'),
+            false,
+            ERROR
+         );
+         return false;
       }
 
       /* Unicity check
@@ -320,9 +326,6 @@ class Document extends CommonDBTM {
    }
 
 
-   /**
-    * @see CommonDBTM::prepareInputForUpdate()
-   **/
    function prepareInputForUpdate($input) {
 
       // security (don't accept filename from $_REQUEST)
@@ -341,6 +344,15 @@ class Document extends CommonDBTM {
 
       unset($input['current_filepath']);
       unset($input['current_filename']);
+
+      if (isset($input['link']) && !empty($input['link'])  && !Toolbox::isValidWebUrl($input['link'])) {
+         Session::addMessageAfterRedirect(
+            __('Invalid link'),
+            false,
+            ERROR
+         );
+         return false;
+      }
 
       return $input;
    }
@@ -506,7 +518,7 @@ class Document extends CommonDBTM {
       $open  = '';
       $close = '';
       if (self::canView()
-          || self::canViewFile(['tickets_id' =>$this->fields['tickets_id']])) {
+          || $this->canViewFile(['tickets_id' => $this->fields['tickets_id']])) {
          $open  = "<a href='".$CFG_GLPI["root_doc"]."/front/document.send.php?docid=".
                     $this->fields['id'].$params."' alt=\"".$initfileout."\"
                     title=\"".$initfileout."\"target='_blank'>";
@@ -887,7 +899,7 @@ class Document extends CommonDBTM {
          'id'                 => '80',
          'table'              => 'glpi_entities',
          'field'              => 'completename',
-         'name'               => __('Entity'),
+         'name'               => Entity::getTypeName(1),
          'massiveaction'      => false,
          'datatype'           => 'dropdown'
       ];
@@ -1435,11 +1447,6 @@ class Document extends CommonDBTM {
    }
 
 
-   /**
-    * @since 0.85
-    *
-    * @see CommonDBTM::getMassiveActionsForItemtype()
-   **/
    static function getMassiveActionsForItemtype(array &$actions, $itemtype, $is_deleted = 0,
                                                 CommonDBTM $checkitem = null) {
       $action_prefix = 'Document_Item'.MassiveAction::CLASS_ACTION_SEPARATOR;
@@ -1513,15 +1520,15 @@ class Document extends CommonDBTM {
     * @return string Image path on disk
     */
    public static function getImage($path, $context, $mwidth = null, $mheight = null) {
-      if ($mwidth === null && $mheight === null) {
+      if ($mwidth === null || $mheight === null) {
          switch ($context) {
             case 'mail':
-               $mwidth = 400;
-               $mheight = 300;
+               $mwidth  = $mwidth ?? 400;
+               $mheight = $mheight ?? 300;
                break;
             case 'timeline':
-               $mwidth = 100;
-               $mheight = 100;
+               $mwidth  = $mwidth ?? 100;
+               $mheight = $mheight ?? 100;
                break;
             default:
                throw new \RuntimeException("Unknown context $context!");

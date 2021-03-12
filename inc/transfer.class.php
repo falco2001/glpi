@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -414,16 +414,15 @@ class Transfer extends CommonDBTM {
          foreach ($CFG_GLPI['software_types'] as $itemtype) {
             $itemtable = getTableForItemType($itemtype);
             // Clean DB
-            $DB->delete('glpi_items_softwareversions', ["{$itemtable}.id"  => null], [
+            $DB->delete('glpi_items_softwareversions', [
+               "{$itemtable}.id"  => null,
+               'glpi_items_softwareversions.itemtype' => $itemtype
+            ], [
                'LEFT JOIN' => [
                   $itemtable  => [
                      'ON' => [
                         'glpi_items_softwareversions' => 'items_id',
-                        $itemtable                    => 'id', [
-                           'AND' => [
-                              'glpi_items_softwareversions.itemtype' => $itemtype
-                           ]
-                        ]
+                        $itemtable                    => 'id'
                      ]
                   ]
                ]
@@ -1582,7 +1581,9 @@ class Transfer extends CommonDBTM {
             'WHERE'  => [
                'items_id'     => $ID,
                'itemtype'     => $itemtype,
-               'softwareversions_id'   => $this->noneedtobe_transfer['SoftwareVersion']
+               'NOT'          => [
+                  'softwareversions_id' => $this->noneedtobe_transfer['SoftwareVersion'],
+               ]
             ]
          ];
 
@@ -3547,7 +3548,7 @@ class Transfer extends CommonDBTM {
       echo "</td></tr>";
 
       echo "<tr class='tab_bg_1'>";
-      echo "<td>"._n('Device', 'Devices', Session::getPluralNumber())."</td><td>";
+      echo "<td>".Peripheral::getTypeName(Session::getPluralNumber())."</td><td>";
       $params['value'] = $this->fields['keep_dc_peripheral'];
       Dropdown::showFromArray('keep_dc_peripheral', $keep, $params);
       echo "</td>";
@@ -3590,7 +3591,7 @@ class Transfer extends CommonDBTM {
       echo "</td></tr>";
 
       echo "<tr class='tab_bg_1'>";
-      echo "<td>"._n('Document', 'Documents', Session::getPluralNumber())."</td><td>";
+      echo "<td>".Document::getTypeName(Session::getPluralNumber())."</td><td>";
       $params['value'] = $this->fields['keep_document'];
       Dropdown::showFromArray('keep_document', $keep, $params);
       echo "</td>";

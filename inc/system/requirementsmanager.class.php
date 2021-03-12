@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -38,6 +38,7 @@ use Glpi\System\Requirement\ExtensionClass;
 use Glpi\System\Requirement\ExtensionFunction;
 use Glpi\System\Requirement\LogsWriteAccess;
 use Glpi\System\Requirement\MemoryLimit;
+use Glpi\System\Requirement\MysqliMysqlnd;
 use Glpi\System\Requirement\PhpVersion;
 use Glpi\System\Requirement\ProtectedWebAccess;
 use Glpi\System\Requirement\SeLinux;
@@ -70,7 +71,7 @@ class RequirementsManager {
 
       $requirements[] = new MemoryLimit(64 * 1024 *1024);
 
-      $requirements[] = new Extension('mysqli');
+      $requirements[] = new MysqliMysqlnd();
       $requirements[] = new Extension('ctype');
       $requirements[] = new Extension('fileinfo');
       $requirements[] = new Extension('json');
@@ -86,10 +87,10 @@ class RequirementsManager {
       $requirements[] = new Extension('Zend OPcache', true); // to enhance perfs
       $requirements[] = new Extension('xmlrpc', true); // for XMLRPC API
       $requirements[] = new ExtensionClass('CAS', 'phpCAS', true); // for CAS lib
-      $requirements[] = new Extension('exif', true);
-      $requirements[] = new Extension('zip', true);
-      $requirements[] = new Extension('bz2', true);
-      $requirements[] = new Extension('sodium', true);
+      $requirements[] = new Extension('exif', true); // for security reasons (images checks)
+      $requirements[] = new Extension('zip', true); // to handle zip packages on marketplace
+      $requirements[] = new Extension('bz2', true); // to handle bz2 packages on marketplace
+      $requirements[] = new Extension('sodium', true); // to enhance performances on encrypt/decrypt (fallback to polyfill)
 
       if ($db instanceof \DBmysql) {
          $requirements[] = new DbEngine($db);
@@ -99,39 +100,19 @@ class RequirementsManager {
       global $PHPLOGGER;
       $requirements[] = new LogsWriteAccess($PHPLOGGER);
 
-      foreach ($this->getDataDirectories() as $directory) {
+      foreach (Variables::getDataDirectories() as $directory) {
+         if ($directory === GLPI_LOG_DIR) {
+            continue; // Specifically checked by LogsWriteAccess requirement
+         }
          $requirements[] = new DirectoryWriteAccess($directory);
       }
 
       $requirements[] = new DirectoryWriteAccess(GLPI_MARKETPLACE_DIR, true);
 
-      $requirements[] = new ProtectedWebAccess(array_merge($this->getDataDirectories(), [GLPI_LOG_DIR]));
+      $requirements[] = new ProtectedWebAccess(Variables::getDataDirectories());
 
       $requirements[] = new SeLinux();
 
       return new RequirementsList($requirements);
-   }
-
-   /**
-    * Returns list of directories that requires write access.
-    *
-    * @return string[]
-    */
-   private function getDataDirectories() {
-      return [
-         GLPI_CONFIG_DIR,
-         GLPI_DOC_DIR,
-         GLPI_DUMP_DIR,
-         GLPI_SESSION_DIR,
-         GLPI_CRON_DIR,
-         GLPI_GRAPH_DIR,
-         GLPI_LOCK_DIR,
-         GLPI_PLUGIN_DOC_DIR,
-         GLPI_TMP_DIR,
-         GLPI_CACHE_DIR,
-         GLPI_RSS_DIR,
-         GLPI_UPLOAD_DIR,
-         GLPI_PICTURE_DIR,
-      ];
    }
 }

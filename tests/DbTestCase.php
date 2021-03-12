@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -75,13 +75,14 @@ class DbTestCase extends \GLPITestCase {
    /**
     * change current entity
     *
-    * @param string $entityname Name of the entity
+    * @param int|string $entityname Name of the entity (or its id)
     * @param boolean $subtree   Recursive load
     *
     * @return void
     */
    protected function setEntity($entityname, $subtree) {
-      $res = Session::changeActiveEntities(getItemByTypeName('Entity', $entityname, true), $subtree);
+      $entity_id = is_int($entityname) ? $entityname : getItemByTypeName('Entity', $entityname, true);
+      $res = Session::changeActiveEntities($entity_id, $subtree);
       $this->boolean($res)->isTrue();
    }
 
@@ -115,6 +116,15 @@ class DbTestCase extends \GLPITestCase {
     * @return array
     */
    protected function getClasses($function = false, array $excludes = []) {
+      // Add deprecated classes to excludes to prevent test failure
+      $excludes = array_merge(
+         $excludes,
+         [
+            'TicketFollowup', // Deprecated
+            '/^Computer_Software.*/', // Deprecated
+         ]
+      );
+
       $classes = [];
       foreach (new \DirectoryIterator('inc/') as $fileInfo) {
          if (!$fileInfo->isFile()) {

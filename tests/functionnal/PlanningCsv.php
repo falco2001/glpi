@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -105,6 +105,7 @@ class PlanningCsv extends \DbTestCase {
          $edate = clone $date;
          $edate->add(new \DateInterval('P2D'));
          $input = [
+            'content'         => sprintf('Task with "%s" state', $taskstate),
             'state'           => $taskstate,
             'tickets_id'      => $tid,
             'users_id_tech'   => \Session::getLoginUserID(),

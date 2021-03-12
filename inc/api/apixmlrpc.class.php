@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -119,7 +119,7 @@ class APIXmlrpc extends API {
                                                                $this->parameters));
 
       } else if ($resource === "search") { // Search on itemtype
-         self::checkSessionToken();
+         $this->checkSessionToken();
 
          //search
          $response =  $this->searchItems($this->parameters['itemtype'], $this->parameters);
@@ -300,7 +300,7 @@ class APIXmlrpc extends API {
       }
 
       http_response_code($httpcode);
-      self::header($this->debug);
+      $this->header($this->debug);
 
       $response = $this->escapekeys($response);
       $out = xmlrpc_encode_request(null, $response, ['encoding' => 'UTF-8',

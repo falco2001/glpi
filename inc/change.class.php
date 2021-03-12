@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -62,11 +62,6 @@ class Change extends CommonITILObject {
 
 
 
-   /**
-    * Name of the type
-    *
-    * @param $nb : number of item in the type (default 0)
-   **/
    static function getTypeName($nb = 0) {
       return _n('Change', 'Changes', $nb);
    }
@@ -155,9 +150,6 @@ class Change extends CommonITILObject {
    }
 
 
-   /**
-    * @see CommonDBTM::getSpecificMassiveActions()
-   **/
    function getSpecificMassiveActions($checkitem = null) {
 
       $actions = parent::getSpecificMassiveActions($checkitem);
@@ -391,6 +383,8 @@ class Change extends CommonITILObject {
             '_disablenotif' => true
          ]);
       }
+
+      $this->handleItemsIdInput();
    }
 
 
@@ -540,7 +534,7 @@ class Change extends CommonITILObject {
 
       $tab = [self::INCOMING      => _x('status', 'New'),
                    self::EVALUATION    => __('Evaluation'),
-                   self::APPROVAL      => __('Approval'),
+                   self::APPROVAL      => _n('Approval', 'Approvals', 1),
                    self::ACCEPTED      => _x('status', 'Accepted'),
                    self::WAITING       => __('Pending'),
                    self::TEST          => _x('change', 'Testing'),
@@ -805,6 +799,8 @@ class Change extends CommonITILObject {
       echo "</th>";
       echo "<td class='left' width='$colsize2%'>";
 
+      $this->displayHiddenItemsIdInput($options);
+
       if (isset($tickets_id)) {
          echo "<input type='hidden' name='_tickets_id' value='".$tickets_id."'>";
       }
@@ -938,7 +934,7 @@ class Change extends CommonITILObject {
          echo "<input id='$idurgency' type='hidden' name='urgency' value='".
                 $this->fields["urgency"]."'>";
          echo $tt->getBeginHiddenFieldValue('urgency');
-         echo parent::getUrgencyName($this->fields["urgency"]);
+         echo self::getUrgencyName($this->fields["urgency"]);
          echo $tt->getEndHiddenFieldValue('urgency', $this);
       }
       echo "</td>";
@@ -986,7 +982,7 @@ class Change extends CommonITILObject {
       } else {
          $idimpact = "value_impact".mt_rand();
          echo "<input id='$idimpact' type='hidden' name='impact' value='".$this->fields["impact"]."'>";
-         echo parent::getImpactName($this->fields["impact"]);
+         echo self::getImpactName($this->fields["impact"]);
       }
       echo $tt->getEndHiddenFieldValue('impact', $this);
       echo "</td>";
@@ -1013,7 +1009,7 @@ class Change extends CommonITILObject {
       $idajax = 'change_priority_' . mt_rand();
 
       if (!$tt->isHiddenField('priority')) {
-         $idpriority = parent::dropdownPriority([
+         $idpriority = self::dropdownPriority([
             'value'     => $this->fields["priority"],
             'withmajor' => true
          ]);
@@ -1022,7 +1018,7 @@ class Change extends CommonITILObject {
       } else {
          $idpriority = 0;
          echo $tt->getBeginHiddenFieldValue('priority');
-         echo "<span id='$idajax'>".parent::getPriorityName($this->fields["priority"])."</span>";
+         echo "<span id='$idajax'>".self::getPriorityName($this->fields["priority"])."</span>";
          echo "<input id='$idajax' type='hidden' name='priority' value='".$this->fields["priority"]."'>";
          echo $tt->getEndHiddenFieldValue('priority', $this);
       }
@@ -1052,7 +1048,7 @@ class Change extends CommonITILObject {
          echo $tt->getEndHiddenFieldText('_add_validation');
       } else {
          echo $tt->getBeginHiddenFieldText('global_validation');
-         echo __('Approval');
+         echo _n('Approval', 'Approvals', 1);
          echo $tt->getEndHiddenFieldText('global_validation');
       }
       echo "</th>";
@@ -1190,7 +1186,7 @@ class Change extends CommonITILObject {
 
       $options            = [];
       $options['canedit'] = false;
-      $this->showFormHeader($options);
+      CommonDBTM::showFormHeader($options);
 
       echo "<tr class='tab_bg_2'>";
       echo "<td>".__('Impacts')."</td><td colspan='3'>";
@@ -1230,7 +1226,7 @@ class Change extends CommonITILObject {
 
       $options            = [];
       $options['canedit'] = false;
-      $this->showFormHeader($options);
+      CommonDBTM::showFormHeader($options);
 
       echo "<tr class='tab_bg_2'>";
       echo "<td>".__('Deployment plan')."</td><td colspan='3'>";
@@ -1272,11 +1268,6 @@ class Change extends CommonITILObject {
    }
 
 
-   /**
-    * @since 0.85
-    *
-    * @see commonDBTM::getRights()
-    **/
    function getRights($interface = 'central') {
 
       $values = parent::getRights();
@@ -1331,8 +1322,8 @@ class Change extends CommonITILObject {
     *
     * Will also display changes of linked items
     *
-    * @param CommonDBTM $item
-    * @param boolean    $withtemplate
+    * @param CommonDBTM      $item
+    * @param boolean|integer $withtemplate
     *
     * @return boolean|void
    **/
@@ -1566,7 +1557,8 @@ class Change extends CommonITILObject {
          'impactcontent'              => '',
          'rolloutplancontent'         => '',
          'backoutplancontent'         => '',
-         'checklistcontent'           => ''
+         'checklistcontent'           => '',
+         'items_id'                   => 0,
       ];
    }
 
@@ -1615,5 +1607,9 @@ class Change extends CommonITILObject {
 
    static function getIcon() {
       return "fas fa-clipboard-check";
+   }
+
+   public static function getItemLinkClass(): string {
+      return Change_Item::class;
    }
 }

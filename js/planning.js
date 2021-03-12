@@ -508,10 +508,10 @@ var GLPIPlanning  = {
          },
          eventClick: function(info) {
             var event    = info.event;
-            var start    = event.start;
-            var ajaxurl  = event.extendedProps.ajaxurl+"&start="+start.toISOString();
             var editable = event.extendedProps._editable; // do not know why editable property is not available
-            if (ajaxurl && editable && !disable_edit) {
+            if (event.extendedProps.ajaxurl && editable && !disable_edit) {
+               var start    = event.start;
+               var ajaxurl  = event.extendedProps.ajaxurl+"&start="+start.toISOString();
                info.jsEvent.preventDefault(); // don't let the browser navigate
                $('<div></div>')
                   .dialog({
@@ -523,7 +523,15 @@ var GLPIPlanning  = {
                      }
                   })
                   .load(ajaxurl, function() {
-                     $(this).dialog('option', 'position', ['center', 'center'] );
+                     $(this).dialog({
+                        position: {
+                           my: 'center',
+                           at: 'center',
+                           viewport: $(window),
+                           of: $('#page'),
+                           collision: 'fit'
+                        }
+                     });
                   });
             }
          },
@@ -565,7 +573,15 @@ var GLPIPlanning  = {
                         res_items_id: items_id,
                      },
                      function() {
-                        $(this).dialog('option', 'position', ['center', 'center'] );
+                        $(this).dialog({
+                           position: {
+                              my: 'center',
+                              at: 'center',
+                              viewport: $(window),
+                              of: $('#page'),
+                              collision: 'fit'
+                           }
+                        });
                      }
                   );
                },
@@ -575,8 +591,9 @@ var GLPIPlanning  = {
                },
                position: {
                   my: 'center',
-                  at: 'center',
-                  viewport: $(window)
+                  at: 'center top',
+                  viewport: $(window),
+                  of: $('#page')
                }
             });
 
@@ -893,7 +910,15 @@ var GLPIPlanning  = {
       $('#planning_datepicker').flatpickr({
          defaultDate: currentDate,
          onChange: function(selected_date) {
-            GLPIPlanning.calendar.gotoDate(selected_date[0]);
+            // convert to UTC to avoid timezone issues
+            var date = new Date(
+               Date.UTC(
+                  selected_date[0].getFullYear(),
+                  selected_date[0].getMonth(),
+                  selected_date[0].getDate()
+               )
+            );
+            GLPIPlanning.calendar.gotoDate(date);
          }
       });
    },

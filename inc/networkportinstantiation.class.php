@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -124,7 +124,7 @@ class NetworkPortInstantiation extends CommonDBChild {
    static function getGlobalInstantiationNetworkPortDisplayOptions() {
       return ['mac'           => ['name'    => __('MAC'),
                                             'default' => true],
-                   'vlans'         => ['name'    => __('VLAN'),
+                   'vlans'         => ['name'    => Vlan::getTypeName(1),
                                             'default' => false],
                    'virtual_ports' => ['name'    => __('Virtual ports'),
                                             'default' => false],
@@ -462,7 +462,7 @@ class NetworkPortInstantiation extends CommonDBChild {
    function showNetworkCardField(NetworkPort $netport, $options = [], $recursiveItems = []) {
       global $DB;
 
-      echo "<td>" . __('Network card') . "</td>\n";
+      echo "<td>" . DeviceNetworkCard::getTypeName(1) . "</td>\n";
       echo "<td>";
 
       if (count($recursiveItems)  > 0) {
@@ -584,7 +584,7 @@ class NetworkPortInstantiation extends CommonDBChild {
    **/
    function showNetpointField(NetworkPort $netport, $options = [], $recursiveItems = []) {
 
-      echo "<td>" . __('Network outlet') . "</td>\n";
+      echo "<td>" . _n('Network outlet', 'Network outlets', 1) . "</td>\n";
       echo "<td>";
       if (count($recursiveItems) > 0) {
          $lastItem = $recursiveItems[count($recursiveItems) - 1];

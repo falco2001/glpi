@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -29,6 +29,8 @@
  * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
  * ---------------------------------------------------------------------
  */
+
+use Glpi\Event;
 
 if (!defined('GLPI_ROOT')) {
    die("Sorry. You can't access this file directly");
@@ -136,7 +138,7 @@ class Session {
                }
                // Init not set value for language
                if (empty($_SESSION["glpilanguage"])) {
-                  $_SESSION["glpilanguage"] = $CFG_GLPI['language'];
+                  $_SESSION["glpilanguage"] = self::getPreferredLanguage();
                }
                $_SESSION['glpi_dropdowntranslations'] = DropdownTranslation::getAvailableTranslations($_SESSION["glpilanguage"]);
 
@@ -592,16 +594,7 @@ class Session {
       global $CFG_GLPI, $TRANSLATE;
 
       if (!isset($_SESSION["glpilanguage"])) {
-         if (isset($CFG_GLPI["language"])) {
-            // Default config in GLPI >= 0.72
-            $_SESSION["glpilanguage"] = $CFG_GLPI["language"];
-
-         } else if (isset($CFG_GLPI["default_language"])) {
-            // Default config in GLPI < 0.72 : keep it for upgrade process
-            $_SESSION["glpilanguage"] = $CFG_GLPI["default_language"];
-         } else {
-            $_SESSION["glpilanguage"] = "en_GB";
-         }
+         $_SESSION["glpilanguage"] = self::getPreferredLanguage();
       }
 
       $trytoload = $_SESSION["glpilanguage"];
@@ -629,7 +622,13 @@ class Session {
       $TRANSLATE = new Laminas\I18n\Translator\Translator;
       $TRANSLATE->setLocale($trytoload);
 
-      \Locale::setDefault($trytoload);
+      if (class_exists('Locale')) {
+         // Locale class may be missing if intl extension is not installed.
+         // In this case, we may still want to be able to load translations (for instance for requirements checks).
+         \Locale::setDefault($trytoload);
+      } else {
+         Toolbox::logWarning('Missing required intl PHP extension');
+      }
 
       $cache = Config::getCache('cache_trans', 'core', false);
       if ($cache !== false && !defined('TU_USER')) {
@@ -659,6 +658,43 @@ class Session {
       }
 
       return $trytoload;
+   }
+
+   /**
+    * Return preffered language (from HTTP headers, fallback to default GLPI lang).
+    *
+    * @return string
+    */
+   public static function getPreferredLanguage(): string {
+      global $CFG_GLPI;
+
+      // Extract accepted languages from headers
+      // Accept-Language: fr-FR, fr;q=0.9, en;q=0.8, de;q=0.7, *;q=0.5
+      $accepted_languages = [];
+      $values = explode(',', $_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? '');
+      foreach ($values as $value) {
+         $parts = explode(';q=', trim($value));
+         $language = str_replace('-', '_', $parts[0]);
+         $qfactor  = $parts[1] ?? 1; //q-factor defaults to 1
+         $accepted_languages[$language] = $qfactor;
+      }
+      arsort($accepted_languages); // sort by qfactor
+
+      foreach (array_keys($accepted_languages) as $language) {
+         if (array_key_exists($language, $CFG_GLPI['languages'])) {
+            return $language;
+         }
+      }
+
+      if (isset($CFG_GLPI['language'])) {
+         // Default config in GLPI >= 0.72
+         return $CFG_GLPI['language'];
+      } else if (isset($CFG_GLPI['default_language'])) {
+         // Default config in GLPI < 0.72 : keep it for upgrade process
+         return $CFG_GLPI['default_language'];
+      }
+
+      return 'en_GB';
    }
 
    /**
@@ -1088,7 +1124,7 @@ class Session {
             if (!$check_once
                 || !isset($array[$message_type])
                 || in_array($msg, $array[$message_type]) === false) {
-               array_push($array[$message_type], $msg);
+               $array[$message_type][] = $msg;
             }
          }
       }
@@ -1179,7 +1215,7 @@ class Session {
 
 
    /**
-    * Clean expires CSRF tokens
+    * Clean expired CSRF tokens
     *
     * @since 0.83.3
     *
@@ -1255,6 +1291,106 @@ class Session {
 
 
    /**
+    * Get new IDOR token
+    * This token validates the itemtype used by an ajax request is the one asked by a dropdown.
+    * So, we avoid IDOR request where an attacker asks for an another itemtype
+    * than the originaly indtended
+    *
+    * @since 9.5.3
+    *
+    * @param string $itemtype
+    * @param array  $add_params more criteria to check validy of idor tokens
+    *
+    * @return string
+   **/
+   static public function getNewIDORToken(string $itemtype = "", array $add_params = []): string {
+      $token = "";
+      do {
+         $token = bin2hex(random_bytes(32));
+      } while ($token == '');
+
+      if (!isset($_SESSION['glpiidortokens'])) {
+         $_SESSION['glpiidortokens'] = [];
+      }
+
+      $_SESSION['glpiidortokens'][$token] = [
+         'expires'  => time() + GLPI_IDOR_EXPIRES
+      ] + ($itemtype !== "" ? ['itemtype' => $itemtype] : [])
+        + $add_params;
+
+      return $token;
+   }
+
+
+   /**
+    * Validate that the page has a IDOR token in the POST data
+    * and that the token is legit/not expired.
+    * Tokens are kept in session until their time is expired (by default 2h)
+    * to permits multiple ajax calls for a dropdown
+    *
+    * @since 9.5.3
+    *
+    * @param array $data $_POST data
+    *
+    * @return boolean
+   **/
+   static public function validateIDOR(array $data = []): bool {
+      self::cleanIDORTokens();
+
+      if (!isset($data['_idor_token'])) {
+         return false;
+      }
+
+      $token = $data['_idor_token'];
+
+      if (isset($_SESSION['glpiidortokens'][$token])
+          && $_SESSION['glpiidortokens'][$token]['expires'] >= time()) {
+         $idor_data =  $_SESSION['glpiidortokens'][$token];
+         unset($idor_data['expires']);
+
+         // check all stored data for the idor token are present (and identifical) in the posted data
+         $match_expected = function ($expected, $given) use (&$match_expected) {
+            if (is_array($expected)) {
+               if (!is_array($given)) {
+                  return false;
+               }
+               foreach ($expected as $key => $value) {
+                  if (!array_key_exists($key, $given) || !$match_expected($value, $given[$key])) {
+                     return false;
+                  }
+               }
+               return true;
+            } else {
+               return $expected == $given;
+            }
+         };
+
+         return $match_expected($idor_data, $data);
+      }
+
+      return false;
+   }
+
+   /**
+    * Clean expired IDOR tokens
+    *
+    * @since 9.5.3
+    *
+    * @return void
+   **/
+   static public function cleanIDORTokens() {
+      $now = time();
+      if (isset($_SESSION['glpiidortokens']) && is_array($_SESSION['glpiidortokens'])) {
+         foreach ($_SESSION['glpiidortokens'] as $footprint => $token) {
+            if ($token['expires'] < $now) {
+               unset($_SESSION['glpiidortokens'][$footprint]);
+            }
+         }
+      }
+   }
+
+
+   /**
     * Is field having translations ?
     *
     * @since 0.85
@@ -1294,9 +1430,9 @@ class Session {
     */
    static function canImpersonate($user_id) {
 
-      if (self::getLoginUserID() == $user_id
+      if ($user_id <= 0 || self::getLoginUserID() == $user_id
           || (self::isImpersonateActive() && self::getImpersonatorId() == $user_id)) {
-         return false; // Cannot impersonate self or already impersonated user
+         return false; // Cannot impersonate invalid user, self, or already impersonated user
       }
 
       // For now we do not check more than config update right, but we may
@@ -1323,6 +1459,9 @@ class Session {
          return false;
       }
 
+      //store user who impersonated another user
+      $impersonator = $_SESSION['glpiname'];
+
       // Store current user values
       $impersonator_id  = self::isImpersonateActive()
          ? $_SESSION['impersonator_id']
@@ -1341,6 +1480,9 @@ class Session {
       Session::loadLanguage();
 
       $_SESSION['impersonator_id'] = $impersonator_id;
+
+      Event::log(-1, "system", 3, "Impersonate", sprintf(__('%1$s starts impersonating user %2$s'),
+                                                            $impersonator, $user->fields['name']));
 
       return true;
    }
@@ -1361,10 +1503,16 @@ class Session {
          return false;
       }
 
+      //store user which was impersonated by another user
+      $impersonate_user = $_SESSION['glpiname'];
+
       $auth = new Auth();
       $auth->auth_succeded = true;
       $auth->user = $user;
       Session::init($auth);
+
+      Event::log(-1, "system", 3, "Impersonate", sprintf(__('%1$s stops impersonating user %2$s'),
+      $user->fields['name'], $impersonate_user));
 
       return true;
    }
@@ -1406,6 +1554,58 @@ class Session {
     * @return int
     */
    public static function getActiveEntity() {
-      return $_SESSION['glpiactive_entity'];
+      return $_SESSION['glpiactive_entity'] ?? 0;
+   }
+
+   /**
+    * Start session for a given user
+    *
+    * @param int $users_id ID of the user
+    *
+    * @return User|bool
+    */
+   public static function authWithToken(
+      string $token,
+      string $token_type,
+      ?int $entities_id,
+      ?bool $is_recursive
+   ) {
+      $user = new User();
+
+      // Try to load from token
+      if (!$user->getFromDBByToken($token, $token_type)) {
+         return false;
+      }
+
+      $auth = new Auth();
+      $auth->auth_succeded = true;
+      $auth->user = $user;
+      Session::init($auth);
+
+      if (!is_null($entities_id) && !is_null($is_recursive)) {
+         self::loadEntity($entities_id, $is_recursive);
+      }
+
+      return $user;
+   }
+
+   /**
+    * Load given entity.
+    *
+    * @param integer $entities_id  Entity to use
+    * @param boolean $is_recursive Whether to load entities recursivly or not
+    *
+    * @return void
+    */
+   public static function loadEntity($entities_id, $is_recursive): void {
+      $_SESSION["glpiactive_entity"]           = $entities_id;
+      $_SESSION["glpiactive_entity_recursive"] = $is_recursive;
+      if ($is_recursive) {
+         $entities = getSonsOf("glpi_entities", $entities_id);
+      } else {
+         $entities = [$entities_id];
+      }
+      $_SESSION['glpiactiveentities']        = $entities;
+      $_SESSION['glpiactiveentities_string'] = "'".implode("', '", $entities)."'";
    }
 }

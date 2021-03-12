@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -72,7 +72,7 @@ class PlanningExternalEventTemplate extends CommonDropdown {
             'type'  => 'bool'
          ], [
             'name'  => 'plan',
-            'label' => __('Calendar'),
+            'label' => _n('Calendar', 'Calendars', 1),
             'type'  => 'plan',
          ], [
             'name'  => 'rrule',

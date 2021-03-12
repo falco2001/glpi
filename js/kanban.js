@@ -1,7 +1,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -219,6 +219,13 @@
        * @private
        */
       var _backgroundRefresh = null;
+
+      /**
+       * Reference for the background refresh timer
+       * @type {null}
+       * @private
+       */
+      var _backgroundRefreshTimer = null;
 
       /**
        * The user's state object.
@@ -582,6 +589,9 @@
                }
             }
          });
+         $(self.add_column_form).on('submit', 'form', function(e) {
+            e.preventDefault();
+         });
          $(self.add_column_form).on('click', '.kanban-create-column', function() {
             var toolbar = $(self.element + ' .kanban-toolbar');
             $(self.add_column_form).css({
@@ -594,7 +604,9 @@
                top: toolbar.offset().top + toolbar.outerHeight(true)
             });
          });
-         $(self.create_column_form).on('click', '.kanban-create-column', function() {
+         $(self.create_column_form).on('submit', 'form', function(e) {
+            e.preventDefault();
+
             var toolbar = $(self.element + ' .kanban-toolbar');
             $(self.create_column_form).css({
                display: 'none'
@@ -691,6 +703,24 @@
                }
             );
          }
+
+         $(self.element + ' .kanban-container').on('submit', '.kanban-add-form:not(.kanban-bulk-add-form)', function(e) {
+            e.preventDefault();
+            var form = $(e.target);
+            var data = {};
+            data['inputs'] = form.serialize();
+            data['itemtype'] = form.prop('id').split('_')[2];
+            data['action'] = 'add_item';
+
+            $.ajax({
+               method: 'POST',
+               //async: false,
+               url: (self.ajax_root + "kanban.php"),
+               data: data
+            }).done(function() {
+               self.refresh();
+            });
+         });
       };
 
       /**
@@ -1104,6 +1134,16 @@
        * @see generateUserBadge()
       **/
       var preloadBadgeCache = function(options) {
+         var cached_colors = JSON.parse(window.sessionStorage.getItem('badge_colors'));
+         if (cached_colors !== null && cached_colors['_dark_theme'] !== self.dark_theme) {
+            window.sessionStorage.removeItem('badge_colors');
+            self.team_badge_cache = {
+               User: {},
+               Group: {},
+               Supplier: {},
+               Contact: {}
+            };
+         }
          var users = [];
          $.each(self.columns, function(column_id, column) {
             if (column['items'] !== undefined) {
@@ -1211,7 +1251,8 @@
                   User: {},
                   Group: {},
                   Supplier: {},
-                  Contact: {}
+                  Contact: {},
+                  _dark_theme: self.dark_theme
                };
             }
             cached_colors[itemtype][teammember['id']] = bg_color;
@@ -1405,23 +1446,6 @@
          add_form += "</form>";
          $(column_el.find('.kanban-body')[0]).append(add_form);
          $('#' + formID).get(0).scrollIntoView(false);
-         $("#" + formID).on('submit', function(e) {
-            e.preventDefault();
-            var form = $(e.target);
-            var data = {};
-            data['inputs'] = form.serialize();
-            data['itemtype'] = form.prop('id').split('_')[2];
-            data['action'] = 'add_item';
-
-            $.ajax({
-               method: 'POST',
-               //async: false,
-               url: (self.ajax_root + "kanban.php"),
-               data: data
-            }).done(function() {
-               self.refresh();
-            });
-         });
       };
 
       /**
@@ -1437,7 +1461,7 @@
 
          var uniqueID = Math.floor(Math.random() * 999999);
          var formID = "form_add_" + itemtype + "_" + uniqueID;
-         var add_form = "<form id='" + formID + "' class='kanban-add-form kanban-form no-track'>";
+         var add_form = "<form id='" + formID + "' class='kanban-add-form kanban-bulk-add-form kanban-form no-track'>";
          var form_header = "<div class='kanban-item-header'>";
          form_header += "<span class='kanban-item-title'>"+self.supported_itemtypes[itemtype]['name']+"</span>";
          form_header += "<i class='fas fa-times' title='Close' onclick='$(this).parent().parent().remove()'></i>";
@@ -1445,7 +1469,6 @@
          add_form += form_header;
 
          add_form += "<div class='kanban-item-content'>";
-         add_form += "<textarea name='bulk_item_list'></textarea>";
          $.each(self.supported_itemtypes[itemtype]['fields'], function(name, options) {
             var input_type = options['type'] !== undefined ? options['type'] : 'text';
             var value = options['value'] !== undefined ? options['value'] : '';
@@ -1457,8 +1480,11 @@
                   add_form += " value='" + value + "'";
                }
                add_form += "/>";
+            } else if (input_type.toLowerCase() === 'raw') {
+               add_form += value;
             }
          });
+         add_form += "<textarea name='bulk_item_list'></textarea>";
          add_form += "</div>";
 
          var column_id_elements = column_el.prop('id').split('-');
@@ -1551,7 +1577,8 @@
        * @since 9.5.0
        */
       var delayRefresh = function() {
-         window.setTimeout(_backgroundRefresh, 10000);
+         window.clearTimeout(_backgroundRefreshTimer);
+         _backgroundRefreshTimer = window.setTimeout(_backgroundRefresh, 10000);
       };
 
       /**
@@ -1721,7 +1748,7 @@
          card_el += "<div class='kanban-item-header'>" + card['title'] + "</div>";
          card_el += "<div class='kanban-item-content'>" + (card['content'] || '') + "</div>";
          card_el += "<div class='kanban-item-team'>";
-         if (card["_team"] !== undefined && card['_team'].length > 0) {
+         if (card["_team"] !== undefined && Object.values(card["_team"]).length > 0) {
             $.each(Object.values(card["_team"]).slice(0, self.max_team_images), function(teammember_id, teammember) {
                card_el += getTeamBadge(teammember);
             });
@@ -2052,11 +2079,11 @@
             }
             // Refresh and then schedule the next refresh (minutes)
             self.refresh(null, null, function() {
-               window.setTimeout(_backgroundRefresh, self.background_refresh_interval * 60 * 1000);
+               _backgroundRefreshTimer = window.setTimeout(_backgroundRefresh, self.background_refresh_interval * 60 * 1000);
             }, false);
          };
          // Schedule initial background refresh (minutes)
-         window.setTimeout(_backgroundRefresh, self.background_refresh_interval * 60 * 1000);
+         _backgroundRefreshTimer = window.setTimeout(_backgroundRefresh, self.background_refresh_interval * 60 * 1000);
       };
 
       /**

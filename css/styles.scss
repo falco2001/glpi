@@ -1,7 +1,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -171,6 +171,28 @@ sup {
 .deleted {
    background-color: #cf9b9b;
 }
+
+.inherited {
+   color: rgb(34, 77, 194);
+   padding: 5px;
+   margin: 3px 0;
+   border: 1px solid transparent;
+   border-radius: 2px;
+   background-color: rgba(34, 77, 194, .1);
+   white-space: nowrap;
+   font-style: italic;
+   display: table;
+
+   &.inline {
+      display: inline-block;
+   }
+
+   i.fas {
+      margin-right: 2px;
+      font-size: 0.7em;
+   }
+}
+
 
 .separ {
    clear: both;
@@ -1374,7 +1396,7 @@ div.rss {
    margin-left: 10px;
 }
 
-td {
+td, th {
    &.numeric {
       text-align: right;
    }
@@ -2707,6 +2729,10 @@ a.icon_nav_move {
    padding: 1px;
    padding: 5px 0 5px 0;
    width: 75%;
+
+   textarea {
+      max-width: 100%;
+   }
 }
 
 .boxnoteright {
@@ -3782,11 +3808,33 @@ a.copyright {
    color: green !important;
 }
 
+.read_more {
+   position: absolute;
+   bottom: 0;
+   left: 0;
+   width: 100%;
+   text-align: center;
+   margin: 0;
+   padding: 30px 0;
+
+   a, .read_more_button {
+      bottom: 5px;
+      position: absolute;
+      cursor: pointer;
+   }
+}
+
 .timeline_history {
    .h_item {
       clear: both;
       padding-top: 8px;
       border-top: 1px dashed #D2D2D2;
+      display: flex;
+      flex-flow: row wrap;
+
+      &.right {
+         flex-direction: row-reverse;
+      }
    }
 
    .h_hidden {
@@ -3796,7 +3844,8 @@ a.copyright {
    .h_info {
       float: left;
       width: 25%;
-      max-width: 140px;
+      max-width: 145px;
+      margin: 0 10px;
    }
 
    .right .h_info {
@@ -3905,8 +3954,7 @@ a.copyright {
       margin-bottom: 10px;
       min-height: 70px;
       position: relative;
-      margin-right: 0;
-      margin-left: 160px;
+      margin: 0 10px;
       word-wrap: break-word;
       display: flex;
 
@@ -4137,6 +4185,18 @@ a.copyright {
    }
 }
 
+@media screen and (max-width: $break_sphones) {
+   .timeline_history {
+      .h_content {
+         width: 100%;
+      }
+      .middle .h_content {
+         max-width: inherit;
+         width: 100%;
+      }
+   }
+}
+
 .edit_document, .delete_document {
    font-size: 1.5em !important;
    margin-left: .5em;
@@ -4202,21 +4262,6 @@ a.copyright {
          max-height: 350px;
          position: relative;
          overflow: hidden;
-      }
-
-      .read_more {
-         position: absolute;
-         bottom: 0;
-         left: 0;
-         width: 100%;
-         text-align: center;
-         margin: 0;
-         padding: 30px 0;
-
-         a {
-            bottom: 5px;
-            position: absolute;
-         }
       }
 
       &.ITILFollowup .read_more, &.KnowbaseItemComment .read_more {
@@ -6984,3 +7029,36 @@ div.progress {
    color: #ffa500;
 }
 /* /Styles for update page */
+
+
+/** style for relations **/
+.relations_list {
+   li {
+      padding: 6px;
+      border: 1px solid transparent;
+
+      .delete_relation {
+         margin-left: 8px;
+         visibility: hidden;
+      }
+
+      &:hover {
+         border-color: rgba(0, 0, 0, .3);
+
+         .delete_relation {
+            visibility: visible;
+         }
+      }
+   }
+
+   .add_relation {
+      padding: 7px;
+      display: block;
+   }
+}
+/** /style for relations **/
+
+// Fix line breaks in pasted rich text
+.rich_text_container pre, .rich_text_container span {
+   white-space: pre-wrap;
+}

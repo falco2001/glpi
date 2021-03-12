@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -84,7 +84,6 @@ switch ($_REQUEST['action']) {
 
 $grid = new Grid($_REQUEST['dashboard'] ?? "");
 
-session_write_close();
 header("Content-Type: text/html; charset=UTF-8");
 switch ($_REQUEST['action']) {
    case 'add_new':
@@ -105,7 +104,18 @@ switch ($_REQUEST['action']) {
       break;
 
    case 'get_card':
+      session_write_close();
       echo $grid->getCardHtml($_REQUEST['card_id'], $_REQUEST);
+      break;
+
+   case 'display_add_filter':
+      $grid->displayFilterForm($_REQUEST);
+      break;
+   case 'get_dashboard_filters':
+      echo $grid->getFiltersSetHtml($_REQUEST['filters'] ?? []);
+      break;
+   case 'get_filter':
+      echo $grid->getFilterHtml($_REQUEST['filter_id']);
       break;
 
    case 'get_dashboard_items':

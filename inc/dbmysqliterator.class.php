@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -544,9 +544,8 @@ class DBmysqlIterator implements Iterator, Countable {
     */
    private function analyseCriterion($value) {
       $criterion = null;
-      $crit_value;
 
-      if (is_null($value) || is_string($value) && strtolower($value) === 'null') {
+      if (is_null($value) || (is_string($value) && strtolower($value) === 'null')) {
          // NULL condition
          $criterion = 'IS NULL';
       } else {
@@ -590,8 +589,6 @@ class DBmysqlIterator implements Iterator, Countable {
          return $value->getQuery();
       } else if ($value instanceof \QueryExpression) {
          return $value->getValue();
-      } else if (DBmysql::isNameQuoted($value)) { //FIXME: database related
-         return $value;
       } else if ($value instanceof \QueryParam) {
          return $value->getValue();
       } else {

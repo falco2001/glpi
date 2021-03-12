@@ -3,7 +3,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -42,6 +42,7 @@ use Auth;
 use Change;
 use CommonDevice;
 use CommonGLPI;
+use CommonITILObject;
 use Config;
 use Contract;
 use Document;
@@ -740,7 +741,7 @@ abstract class API extends CommonGLPI {
           && $params['with_networkports']) {
          $fields['_networkports'] = [];
          if (!NetworkEquipment::canView()) {
-            $fields['_networkports'] = self::arrayRightError();
+            $fields['_networkports'] = $this->arrayRightError();
          } else {
             foreach (NetworkPort::getNetworkPortInstantiations() as $networkport_type) {
                $netport_table = $networkport_type::getTable();
@@ -904,7 +905,7 @@ abstract class API extends CommonGLPI {
           && $params['with_infocoms']) {
          $fields['_infocoms'] = [];
          if (!Infocom::canView()) {
-            $fields['_infocoms'] = self::arrayRightError();
+            $fields['_infocoms'] = $this->arrayRightError();
          } else {
             $ic = new Infocom();
             if ($ic->getFromDBforDevice($itemtype, $id)) {
@@ -918,7 +919,7 @@ abstract class API extends CommonGLPI {
           && $params['with_contracts']) {
          $fields['_contracts'] = [];
          if (!Contract::canView()) {
-            $fields['_contracts'] = self::arrayRightError();
+            $fields['_contracts'] = $this->arrayRightError();
          } else {
             $iterator = $DB->request([
                'SELECT'    => ['glpi_contracts_items.*'],
@@ -957,7 +958,7 @@ abstract class API extends CommonGLPI {
              && $itemtype != 'KnowbaseItem'
              && $itemtype != 'Reminder'
              && !Document::canView()) {
-            $fields['_documents'] = self::arrayRightError();
+            $fields['_documents'] = $this->arrayRightError();
          } else {
             $doc_criteria = [
                'glpi_documents_items.items_id'  => $id,
@@ -1012,7 +1013,7 @@ abstract class API extends CommonGLPI {
           && $params['with_tickets']) {
          $fields['_tickets'] = [];
          if (!Ticket::canView()) {
-            $fields['_tickets'] = self::arrayRightError();
+            $fields['_tickets'] = $this->arrayRightError();
          } else {
             $criteria = Ticket::getCommonCriteria();
             $criteria['WHERE'] = [
@@ -1031,7 +1032,7 @@ abstract class API extends CommonGLPI {
           && $params['with_problems']) {
          $fields['_problems'] = [];
          if (!Problem::canView()) {
-            $fields['_problems'] = self::arrayRightError();
+            $fields['_problems'] = $this->arrayRightError();
          } else {
             $criteria = Problem::getCommonCriteria();
             $criteria['WHERE'] = [
@@ -1050,7 +1051,7 @@ abstract class API extends CommonGLPI {
           && $params['with_changes']) {
          $fields['_changes'] = [];
          if (!Change::canView()) {
-            $fields['_changes'] = self::arrayRightError();
+            $fields['_changes'] = $this->arrayRightError();
          } else {
             $criteria = Change::getCommonCriteria();
             $criteria['WHERE'] = [
@@ -1069,7 +1070,7 @@ abstract class API extends CommonGLPI {
           && $params['with_notes']) {
          $fields['_notes'] = [];
          if (!Session::haveRight($itemtype::$rightname, READNOTE)) {
-            $fields['_notes'] = self::arrayRightError();
+            $fields['_notes'] = $this->arrayRightError();
          } else {
             $fields['_notes'] = Notepad::getAllForItem($item);
          }
@@ -1080,7 +1081,7 @@ abstract class API extends CommonGLPI {
           && $params['with_logs']) {
          $fields['_logs'] = [];
          if (!Session::haveRight($itemtype::$rightname, READNOTE)) {
-            $fields['_logs'] = self::arrayRightError();
+            $fields['_logs'] = $this->arrayRightError();
          } else {
             $fields['_logs'] = getAllDataFromTable(
                "glpi_logs", [
@@ -1291,7 +1292,7 @@ abstract class API extends CommonGLPI {
          // make text search
          foreach ($params['searchText']  as $filter_field => $filter_value) {
             if (!empty($filter_value)) {
-               $search_value = Search::makeTextSearch($filter_value);
+               $search_value = Search::makeTextSearch($DB->escape($filter_value));
                $where.= " AND (".$DB->quoteName("$table.$filter_field")." $search_value)";
             }
          }
@@ -1630,8 +1631,8 @@ abstract class API extends CommonGLPI {
       if (isset($params['criteria']) && is_array($params['criteria'])) {
 
          // use a recursive closure to check each nested criteria
-         $check_criteria = function($criteria) use (&$check_criteria, $soptions) {
-            foreach ($criteria as $criterion) {
+         $check_criteria = function(&$criteria) use (&$check_criteria, $soptions) {
+            foreach ($criteria as &$criterion) {
                // recursive call
                if (isset($criterion['criteria'])) {
                   return $check_criteria($criterion['criteria']);
@@ -1652,6 +1653,9 @@ abstract class API extends CommonGLPI {
                    && $soptions[$criterion['field']]['nosearch']) {
                   return __("Forbidden field ID in search criteria");
                }
+
+               // Escape value to prevent SQL injection
+               $criterion['value'] = Toolbox::addslashes_deep($criterion['value']);
             }
 
             return true;
@@ -1853,7 +1857,7 @@ abstract class API extends CommonGLPI {
          $failed       = 0;
          $index        = 0;
          foreach ($input as $object) {
-            $object      = self::inputObjectToArray($object);
+            $object      = $this->inputObjectToArray($object);
             $current_res = [];
 
             //check rights
@@ -2217,9 +2221,9 @@ abstract class API extends CommonGLPI {
       }
       $this->checkAppToken();
       $this->logEndpointUsage($endpoint);
-      self::checkSessionToken();
+      $this->checkSessionToken();
       if ($unlock_session) {
-         self::unlockSessionIfPossible();
+         $this->unlockSessionIfPossible();
       }
    }
 
@@ -2413,7 +2417,7 @@ abstract class API extends CommonGLPI {
     * @return void
     */
    public function inlineDocumentation($file) {
-      self::header(true, __("API Documentation"));
+      $this->header(true, __("API Documentation"));
       echo Html::css("public/lib/prismjs.css");
       echo Html::script("public/lib/prismjs.js");
 
@@ -2438,7 +2442,7 @@ abstract class API extends CommonGLPI {
     * You can pass an array of array, this method is recursive.
     *
     * @param array   $fields to check and transform
-    * @param boolean $params array of option to enable, could be :
+    * @param array   $params array of option to enable, could be :
     *                                 - expand_dropdowns (default false)
     *                                 - get_hateoas      (default true)
     *
@@ -2470,6 +2474,10 @@ abstract class API extends CommonGLPI {
             }
             if ($key == "default_requesttypes_id") {
                $key = "requesttypes_id";
+            }
+            // mainitems_id mainitemtype
+            if ($key == "mainitems_id" && isset($fields['mainitemtype'])) {
+               $key = getForeignKeyFieldForItemType($fields['mainitemtype']);
             }
 
             if (!empty($value)

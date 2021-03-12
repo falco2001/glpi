@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -43,7 +43,7 @@ class PrinterType extends CommonDropdown {
    }
 
    static function getFieldLabel() {
-      return __('Type');
+      return _n('Type', 'Types', 1);
    }
 
 }

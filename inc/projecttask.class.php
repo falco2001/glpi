@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -155,25 +155,6 @@ class ProjectTask extends CommonDBChild implements CalDAVCompatibleItemInterface
       parent::cleanDBonPurge();
    }
 
-   /**
-    * get the request results to get items associated to the given one (defined by $itemtype and $items_id)
-    *
-    * @param string  $itemtype          the type of the item we want the resulting items to be associated to
-    * @param string  $items_id          the name of the item we want the resulting items to be associated to
-    *
-    * @return array the items associated to the given one (empty if none was found)
-    **/
-   static function getItemsAssociationRequest($itemtype, $items_id) {
-      global $DB;
-
-      return $DB->request([
-         'SELECT' => 'id',
-         'FROM'   => static::getTable(),
-         'WHERE'  => [
-            static::$items_id  => $items_id
-         ]
-      ]);
-   }
 
    /**
     * Duplicate all tasks from a project template to his clone
@@ -699,7 +680,7 @@ class ProjectTask extends CommonDBChild implements CalDAVCompatibleItemInterface
       ProjectState::dropdown(['value' => $this->fields["projectstates_id"],
                               'rand'  => $rand_state]);
       echo "</td>";
-      echo "<td>".__('Type')."</td>";
+      echo "<td>"._n('Type', 'Types', 1)."</td>";
       echo "<td>";
       ProjectTaskType::dropdown(['value' => $this->fields["projecttasktypes_id"],
                                  'rand'  => $rand_type]);
@@ -952,7 +933,7 @@ class ProjectTask extends CommonDBChild implements CalDAVCompatibleItemInterface
          'id'                 => '2',
          'table'              => 'glpi_projects',
          'field'              => 'name',
-         'name'               => __('Project'),
+         'name'               => Project::getTypeName(1),
          'massiveaction'      => false,
          'datatype'           => 'dropdown'
       ];
@@ -991,7 +972,7 @@ class ProjectTask extends CommonDBChild implements CalDAVCompatibleItemInterface
          'id'                 => '14',
          'table'              => 'glpi_projecttasktypes',
          'field'              => 'name',
-         'name'               => __('Type'),
+         'name'               => _n('Type', 'Types', 1),
          'datatype'           => 'dropdown'
       ];
 
@@ -1124,7 +1105,7 @@ class ProjectTask extends CommonDBChild implements CalDAVCompatibleItemInterface
          'id'                 => '80',
          'table'              => 'glpi_entities',
          'field'              => 'completename',
-         'name'               => __('Entity'),
+         'name'               => Entity::getTypeName(1),
          'datatype'           => 'dropdown'
       ];
 
@@ -1160,7 +1141,7 @@ class ProjectTask extends CommonDBChild implements CalDAVCompatibleItemInterface
 
       $columns = [
          'name'             => self::getTypeName(Session::getPluralNumber()),
-         'tname'            => __('Type'),
+         'tname'            => _n('Type', 'Types', 1),
          'sname'            => __('Status'),
          'percent_done'     => __('Percent done'),
          'plan_start_date'  => __('Planned start date'),
@@ -1329,7 +1310,7 @@ class ProjectTask extends CommonDBChild implements CalDAVCompatibleItemInterface
                         ProjectTask::getFormURLWithID($data['id'])."'>".$data['name'].
                         (empty($data['name'])?"(".$data['id'].")":"")."</a>";
             echo sprintf(__('%1$s %2$s'), $link,
-                           Html::showToolTip($data['content'],
+                           Html::showToolTip(Html::entity_decode_deep($data['content']),
                                              ['display' => false,
                                                    'applyto' => "ProjectTask".$data["id"].$rand]));
             echo "</td>";
@@ -1467,7 +1448,7 @@ class ProjectTask extends CommonDBChild implements CalDAVCompatibleItemInterface
          $header_bottom .= "<th width='10'>".Html::getCheckAllAsCheckbox('mass'.__CLASS__.$rand);
          $header_bottom .= "</th>";
       }
-      $header_end .= "<th>".__('Type')."</th>";
+      $header_end .= "<th>"._n('Type', 'Types', 1)."</th>";
       $header_end .= "<th>"._n('Member', 'Members', Session::getPluralNumber())."</th>";
       $header_end .= "</tr>";
       echo $header_begin.$header_top.$header_end;
@@ -2059,7 +2040,7 @@ class ProjectTask extends CommonDBChild implements CalDAVCompatibleItemInterface
          throw new UnexpectedValueException('RRULE not yet implemented for Project tasks');
       }
 
-      $input = $this->getCommonInputFromVcomponent($vtodo);
+      $input = $this->getCommonInputFromVcomponent($vtodo, $this->isNewItem());
 
       if ($vtodo->DESCRIPTION instanceof FlatText) {
          // Description is not in HTML format
@@ -2074,5 +2055,11 @@ class ProjectTask extends CommonDBChild implements CalDAVCompatibleItemInterface
       }
 
       return $input;
+   }
+
+
+   public function prepareInputForClone($input) {
+      $input['uuid'] = \Ramsey\Uuid\Uuid::uuid4();
+      return parent::prepareInputForClone($input);
    }
 }

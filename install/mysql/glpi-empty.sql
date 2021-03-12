@@ -1,7 +1,7 @@
 # /**
 #  * ---------------------------------------------------------------------
 #  * GLPI - Gestionnaire Libre de Parc Informatique
-#  * Copyright (C) 2015-2020 Teclib' and contributors.
+#  * Copyright (C) 2015-2021 Teclib' and contributors.
 #  *
 #  * http://glpi-project.org
 #  *
@@ -1235,7 +1235,7 @@ CREATE TABLE `glpi_impactitems` (
 DROP TABLE IF EXISTS `glpi_impactcontexts`;
 CREATE TABLE `glpi_impactcontexts` (
   `id` INT(11) NOT NULL AUTO_INCREMENT,
-  `positions` TEXT NOT NULL DEFAULT '' COLLATE 'utf8_unicode_ci',
+  `positions` TEXT NOT NULL COLLATE 'utf8_unicode_ci',
   `zoom` FLOAT NOT NULL DEFAULT '0',
   `pan_x` FLOAT NOT NULL DEFAULT '0',
   `pan_y` FLOAT NOT NULL DEFAULT '0',
@@ -2224,6 +2224,8 @@ CREATE TABLE IF NOT EXISTS `glpi_items_devicesimcards` (
   `states_id` int(11) NOT NULL DEFAULT '0',
   `locations_id` int(11) NOT NULL DEFAULT '0',
   `lines_id` int(11) NOT NULL DEFAULT '0',
+  `users_id` int(11) NOT NULL DEFAULT '0',
+  `groups_id` int(11) NOT NULL DEFAULT '0',
   `pin` varchar(255) NOT NULL DEFAULT '',
   `pin2` varchar(255) NOT NULL DEFAULT '',
   `puk` varchar(255) NOT NULL DEFAULT '',
@@ -2240,7 +2242,9 @@ CREATE TABLE IF NOT EXISTS `glpi_items_devicesimcards` (
   KEY `otherserial` (`otherserial`),
   KEY `states_id` (`states_id`),
   KEY `locations_id` (`locations_id`),
-  KEY `lines_id` (`lines_id`)
+  KEY `lines_id` (`lines_id`),
+  KEY `users_id` (`users_id`),
+  KEY `groups_id` (`groups_id`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
 
 
@@ -2389,7 +2393,7 @@ CREATE TABLE `glpi_documents_items` (
   `timeline_position` tinyint(1) NOT NULL DEFAULT '0',
   `date_creation` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `unicity` (`documents_id`,`itemtype`,`items_id`),
+  UNIQUE KEY `unicity` (`documents_id`,`itemtype`,`items_id`,`timeline_position`),
   KEY `item` (`itemtype`,`items_id`,`entities_id`,`is_recursive`),
   KEY `users_id` (`users_id`),
   KEY `date_creation` (`date_creation`)
@@ -2431,7 +2435,6 @@ CREATE TABLE `glpi_domains` (
   `users_id_tech` int(11) NOT NULL DEFAULT '0',
   `groups_id_tech` int(11) NOT NULL DEFAULT '0',
   `others` varchar(255) COLLATE utf8_unicode_ci DEFAULT NULL,
-  `is_helpdesk_visible` tinyint(1) NOT NULL DEFAULT '1',
   `is_deleted` tinyint(1) NOT NULL DEFAULT '0',
   `comment` text COLLATE utf8_unicode_ci,
   `date_mod` timestamp NULL DEFAULT NULL,
@@ -2444,7 +2447,6 @@ CREATE TABLE `glpi_domains` (
   KEY `groups_id_tech` (`groups_id_tech`),
   KEY `date_mod` (`date_mod`),
   KEY `is_deleted` (`is_deleted`),
-  KEY `is_helpdesk_visible` (`is_helpdesk_visible`),
   KEY `date_expiration` (`date_expiration`),
   KEY `date_creation` (`date_creation`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
@@ -3885,6 +3887,7 @@ CREATE TABLE `glpi_mailcollectors` (
   `date_creation` timestamp NULL DEFAULT NULL,
   `requester_field` int(11) NOT NULL DEFAULT '0',
   `add_cc_to_observer` tinyint(1) NOT NULL DEFAULT '0',
+  `collect_only_unread` tinyint(1) NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`),
   KEY `is_active` (`is_active`),
   KEY `date_mod` (`date_mod`),
@@ -5274,6 +5277,7 @@ CREATE TABLE `glpi_profiles_users` (
   `entities_id` int(11) NOT NULL DEFAULT '0',
   `is_recursive` tinyint(1) NOT NULL DEFAULT '1',
   `is_dynamic` tinyint(1) NOT NULL DEFAULT '0',
+  `is_default_profile` tinyint(1) NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`),
   KEY `entities_id` (`entities_id`),
   KEY `profiles_id` (`profiles_id`),
@@ -6346,6 +6350,7 @@ CREATE TABLE `glpi_states` (
   `is_visible_pdu` tinyint(1) NOT NULL DEFAULT '1',
   `is_visible_cluster` tinyint(1) NOT NULL DEFAULT '1',
   `is_visible_contract` tinyint(1) NOT NULL DEFAULT '1',
+  `is_visible_appliance` tinyint(1) NOT NULL DEFAULT '1',
   `date_mod` timestamp NULL DEFAULT NULL,
   `date_creation` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
@@ -6367,6 +6372,7 @@ CREATE TABLE `glpi_states` (
   KEY `is_visible_pdu` (`is_visible_pdu`),
   KEY `is_visible_cluster` (`is_visible_cluster`),
   KEY `is_visible_contract` (`is_visible_contract`),
+  KEY `is_visible_appliance` (`is_visible_appliance`),
   KEY `date_mod` (`date_mod`),
   KEY `date_creation` (`date_creation`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
@@ -8046,13 +8052,12 @@ CREATE TABLE `glpi_appliances` (
   `users_id_tech` int(11) NOT NULL DEFAULT '0',
   `groups_id` int(11) NOT NULL DEFAULT '0',
   `groups_id_tech` int(11) NOT NULL DEFAULT '0',
-  `relationtype` int(11) NOT NULL DEFAULT '0',
   `date_mod` timestamp NULL DEFAULT NULL,
   `states_id` int(11) NOT NULL DEFAULT '0',
-  `is_helpdesk_visible` tinyint(1) NOT NULL DEFAULT '1',
   `externalidentifier` varchar(255) DEFAULT NULL,
   `serial` varchar(255) DEFAULT NULL,
   `otherserial` varchar(255) DEFAULT NULL,
+  `is_helpdesk_visible` tinyint(1) NOT NULL DEFAULT '1',
   PRIMARY KEY  (`id`),
   UNIQUE KEY `unicity` (`externalidentifier`),
   KEY `entities_id` (`entities_id`),
@@ -8068,7 +8073,8 @@ CREATE TABLE `glpi_appliances` (
   KEY `groups_id_tech` (`groups_id_tech`),
   KEY `states_id` (`states_id`),
   KEY `serial` (`serial`),
-  KEY `otherserial` (`otherserial`)
+  KEY `otherserial` (`otherserial`),
+  KEY `is_helpdesk_visible` (`is_helpdesk_visible`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
 
 
@@ -8106,11 +8112,14 @@ CREATE TABLE IF NOT EXISTS `glpi_applianceenvironments` (
   KEY `name` (`name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS `glpi_appliancerelations` (
+CREATE TABLE IF NOT EXISTS `glpi_appliances_items_relations` (
    `id` int(11) NOT NULL auto_increment,
    `appliances_items_id` int(11) NOT NULL DEFAULT '0',
-   `relations_id` int(11) NOT NULL DEFAULT '0',
+   `itemtype` varchar(100) COLLATE utf8_unicode_ci NOT NULL,
+   `items_id` int(11) NOT NULL DEFAULT '0',
    PRIMARY KEY (`id`),
    KEY `appliances_items_id` (`appliances_items_id`),
-   KEY `relations_id` (`relations_id`)
+   KEY `itemtype` (`itemtype`),
+   KEY `items_id` (`items_id`),
+   KEY `item` (`itemtype`,`items_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;

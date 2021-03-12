@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -49,7 +49,6 @@ if (!$DB->tableExists('glpi_appliances')) {
          `relationtype` int(11) NOT NULL DEFAULT '0',
          `date_mod` timestamp NULL DEFAULT NULL,
          `states_id` int(11) NOT NULL DEFAULT '0',
-         `is_helpdesk_visible` tinyint(1) NOT NULL DEFAULT '1',
          `externalidentifier` varchar(255) DEFAULT NULL,
          `serial` varchar(255) DEFAULT NULL,
          `otherserial` varchar(255) DEFAULT NULL,

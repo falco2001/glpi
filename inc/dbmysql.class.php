@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -194,7 +194,13 @@ class DBmysql {
       if ($this->dbh->connect_error) {
          $this->connected = false;
          $this->error     = 1;
+      } else if (!defined('MYSQLI_OPT_INT_AND_FLOAT_NATIVE')) {
+         $this->connected = false;
+         $this->error     = 2;
       } else {
+         if (isset($this->dbenc)) {
+            Toolbox::deprecated('Usage of alternative DB connection encoding (`DB::$dbenc` property) is deprecated.');
+         }
          $dbenc = isset($this->dbenc) ? $this->dbenc : "utf8";
          $this->dbh->set_charset($dbenc);
          if ($dbenc === "utf8") {
@@ -209,9 +215,7 @@ class DBmysql {
          }
 
          // force mysqlnd to return int and float types correctly (not as strings)
-         if (GLPI_FORCE_NATIVE_SQL_TYPES) {
-            $this->dbh->options(MYSQLI_OPT_INT_AND_FLOAT_NATIVE, true);
-         }
+         $this->dbh->options(MYSQLI_OPT_INT_AND_FLOAT_NATIVE, true);
 
          if (GLPI_FORCE_EMPTY_SQL_MODE) {
             $this->dbh->query("SET SESSION sql_mode = ''");
@@ -317,6 +321,7 @@ class DBmysql {
       if ($is_debug && $CFG_GLPI["debug_sql"]) {
          $TIME                                   = $TIMER->getTime();
          $DEBUG_SQL["times"][$SQL_TOTAL_REQUEST] = $TIME;
+         $DEBUG_SQL['rows'][$SQL_TOTAL_REQUEST] = $this->affectedRows();
       }
       if ($this->execution_time === true) {
          $this->execution_time = $TIMER->getTime(0, true);
@@ -632,7 +637,7 @@ class DBmysql {
     *
     * @return DBmysqlIterator
     */
-   function listTables($table = 'glpi_%', array $where = []) {
+   function listTables($table = 'glpi\_%', array $where = []) {
       $iterator = $this->request([
          'SELECT' => 'table_name as TABLE_NAME',
          'FROM'   => 'information_schema.tables',
@@ -651,7 +656,7 @@ class DBmysql {
     * @return DBmysqlIterator
     */
    public function getMyIsamTables(): DBmysqlIterator {
-      $iterator = $this->listTables('glpi_%', ['engine' => 'MyIsam']);
+      $iterator = $this->listTables('glpi\_%', ['engine' => 'MyIsam']);
       return $iterator;
    }
 
@@ -695,6 +700,21 @@ class DBmysql {
          return [];
       }
       return false;
+   }
+
+   /**
+    * Get field of a table
+    *
+    * @param string  $table
+    * @param string  $field
+    * @param boolean $usecache
+    *
+    * @return array|null Field characteristics
+    */
+   function getField(string $table, string $field, $usecache = true): ?array {
+
+      $fields = $this->listFields($table, $usecache);
+      return $fields[$field] ?? null;
    }
 
    /**
@@ -810,6 +830,13 @@ class DBmysql {
             $query = htmlentities($query);
             if (!$this->query($query)) {
                return false;
+            }
+            if (!isCommandLine()) {
+               // Flush will prevent proxy to timeout as it will receive data.
+               // Flush requires a content to be sent, so we sent spaces as multiple spaces
+               // will be shown as a single one on browser.
+               echo ' ';
+               Html::glpi_flush();
             }
          }
       }
@@ -968,7 +995,7 @@ class DBmysql {
       // with all known tables
       $retrieve_all = !$this->cache_disabled && empty($this->table_cache);
 
-      $result = $this->listTables($retrieve_all ? 'glpi_%' : $tablename);
+      $result = $this->listTables($retrieve_all ? 'glpi\_%' : $tablename);
       $found_tables = [];
       while ($data = $result->next()) {
          $found_tables[] = $data['TABLE_NAME'];
@@ -1069,7 +1096,10 @@ class DBmysql {
          $value = $value->getValue();
       } else if ($value === null || $value === 'NULL' || $value === 'null') {
          $value = 'NULL';
-      } else if (!preg_match("/^`.*?`$/", $value)) { //`field` is valid only for mysql :/
+      } else if (is_bool($value)) {
+         // transform boolean as int (prevent `false` to be transformed to empty string)
+         $value = "'" . (int)$value . "'";
+      } else {
          //phone numbers may start with '+' and will be considered as numeric
          $value = "'$value'";
       }
@@ -1619,8 +1649,9 @@ class DBmysql {
            'COUNT'       => 'cpt',
            'FROM'        => 'information_schema.columns',
            'WHERE'       => [
-              'information_schema.columns.table_schema'  => $DB->dbdefault,
-              'information_schema.columns.data_type'     => ['datetime']
+              'information_schema.columns.table_schema' => $DB->dbdefault,
+              'information_schema.columns.table_name'   => ['LIKE', 'glpi\_%'],
+              'information_schema.columns.data_type'    => ['datetime']
            ]
        ])->next();
        return (int)$result['cpt'];

@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -116,7 +116,7 @@ class SLM extends CommonDBTM {
             <textarea cols='45' rows='8' name='comment' >".$this->fields["comment"]."</textarea>";
       echo "</td></tr>";
 
-      echo "<tr class='tab_bg_1'><td>".__('Calendar')."</td>";
+      echo "<tr class='tab_bg_1'><td>"._n('Calendar', 'Calendars', 1)."</td>";
       echo "<td>";
 
       Calendar::dropdown(['value'      => $this->fields["calendars_id"],
@@ -161,7 +161,7 @@ class SLM extends CommonDBTM {
          'id'                 => '4',
          'table'              => 'glpi_calendars',
          'field'              => 'name',
-         'name'               => __('Calendar'),
+         'name'               => _n('Calendar', 'Calendars', 1),
          'datatype'           => 'dropdown'
       ];
 

@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -620,9 +620,6 @@ class KnowbaseItem extends CommonDBVisible implements ExtraVisibilityCriteria {
       return $criteria;
    }
 
-   /**
-    * @see CommonDBTM::prepareInputForAdd()
-   **/
    function prepareInputForAdd($input) {
 
       // set new date if not exists
@@ -1152,7 +1149,7 @@ class KnowbaseItem extends CommonDBVisible implements ExtraVisibilityCriteria {
     * @param $params array  (contains, knowbaseitemcategories_id, faq)
     * @param $type   string search type : browse / search (default search)
     *
-    * @return String : SQL request
+    * @return array : SQL request
    **/
    static function getListRequest(array $params, $type = 'search') {
       global $DB;
@@ -1268,7 +1265,7 @@ class KnowbaseItem extends CommonDBVisible implements ExtraVisibilityCriteria {
                if (!empty($addscore)) {
                   foreach ($addscore as $addscore_field) {
                      $expr .= " + MATCH(" . $DB->quoteName($addscore_field) . ")
-                                        AGAINST('" . $DB->quoteName($search_wilcard) . " IN BOOLEAN MODE)";
+                                        AGAINST(" . $DB->quote($search_wilcard) . " IN BOOLEAN MODE)";
                   }
                }
                $expr .=" ) AS SCORE ";
@@ -1288,14 +1285,16 @@ class KnowbaseItem extends CommonDBVisible implements ExtraVisibilityCriteria {
                         'NOT' => [$addscore_field => null],
                         new QueryExpression(
                            "MATCH(" . $DB->quoteName($addscore_field) . ")
-                              AGAINST('" . $DB->quote($search_wilcard) . "' IN BOOLEAN MODE)"
+                              AGAINST(" . $DB->quote($search_wilcard) . " IN BOOLEAN MODE)"
                         )
                      ];
                   }
 
                }
 
-               $search_where = ['OR' => $ors];
+               $search_where =  $criteria['WHERE']; // Visibility restrict criteria
+
+               $search_where[] = ['OR' => $ors];
 
                // Add visibility date
                $visibility_crit = [
@@ -1511,7 +1510,7 @@ class KnowbaseItem extends CommonDBVisible implements ExtraVisibilityCriteria {
          echo Search::showHeaderItem($output_type, __('Category'), $header_num);
 
          if ($output_type == Search::HTML_OUTPUT) {
-            echo Search::showHeaderItem($output_type, _n('Associated element', 'Associated elements', 2), $header_num);
+            echo Search::showHeaderItem($output_type, _n('Associated element', 'Associated elements', Session::getPluralNumber()), $header_num);
          }
 
          if (isset($options['item_itemtype'])
@@ -1621,7 +1620,7 @@ class KnowbaseItem extends CommonDBVisible implements ExtraVisibilityCriteria {
                   'WHERE'  => [
                      'items_id'  => $data["id"],
                      'itemtype'  => 'KnowbaseItem'
-                  ]
+                  ] + getEntitiesRestrictCriteria()
                ]);
                while ($docs = $iterator->next()) {
                   $doc = new Document();
@@ -1820,7 +1819,7 @@ class KnowbaseItem extends CommonDBVisible implements ExtraVisibilityCriteria {
          'id'                 => '5',
          'table'              => $this->getTable(),
          'field'              => 'date',
-         'name'               => __('Date'),
+         'name'               => _n('Date', 'Dates', 1),
          'datatype'           => 'datetime',
          'massiveaction'      => false
       ];
@@ -1888,27 +1887,10 @@ class KnowbaseItem extends CommonDBVisible implements ExtraVisibilityCriteria {
          'id'                 => '70',
          'table'              => 'glpi_users',
          'field'              => 'name',
-         'name'               => __('User'),
+         'name'               => User::getTypeName(1),
          'massiveaction'      => false,
          'datatype'           => 'dropdown',
          'right'              => 'all'
-      ];
-
-      $tab[] = [
-         'id'                 => '80',
-         'table'              => 'glpi_entities',
-         'field'              => 'completename',
-         'name'               => __('Entity'),
-         'massiveaction'      => false,
-         'datatype'           => 'dropdown'
-      ];
-
-      $tab[] = [
-         'id'                 => '86',
-         'table'              => $this->getTable(),
-         'field'              => 'is_recursive',
-         'name'               => __('Child entities'),
-         'datatype'           => 'bool'
       ];
 
       // add objectlock search options
@@ -1917,11 +1899,6 @@ class KnowbaseItem extends CommonDBVisible implements ExtraVisibilityCriteria {
       return $tab;
    }
 
-   /**
-    * @since 0.85
-    *
-    * @see commonDBTM::getRights()
-   **/
    function getRights($interface = 'central') {
 
       if ($interface == 'central') {

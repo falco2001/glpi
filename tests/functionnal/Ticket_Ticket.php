@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -153,6 +153,7 @@ class Ticket_Ticket extends DbTestCase {
    }
 
    public function testNumberOpen() {
+      $this->login();
       $this->createTickets();
       $tone = $this->tone;
       $ttwo = $this->ttwo;

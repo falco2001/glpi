@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -30,7 +30,9 @@
  * ---------------------------------------------------------------------
  */
 
-abstract class APIBaseClass extends \atoum {
+use atoum\atoum;
+
+abstract class APIBaseClass extends atoum {
    protected $session_token;
    protected $http_client;
    protected $base_uri = "";
@@ -41,14 +43,22 @@ abstract class APIBaseClass extends \atoum {
                                      $expected_codes = 200);
 
    public function beforeTestMethod($method) {
-      parent::beforeTestMethod($method);
       $this->initSessionCredentials();
    }
 
    abstract public function initSessionCredentials();
 
    public function setUp() {
-      parent::setUp();
+      // To bypass various right checks
+      // This is mandatory to create/update/delete some items during tests.
+      $_SESSION['glpishowallentities'] = 1;
+      $_SESSION['glpiactive_entity']   = 0;
+      $_SESSION['glpiactiveentities']  = [0];
+      $_SESSION['glpiactiveentities_string'] = "'0'";
+
+      // Force "cron" mode to prevent user related behaviors
+      $_SESSION['glpicronuserrunning'] = "cron_phpunit";
+
       // enable api config
       $config = new Config;
       $config->update(['id'                              => 1,
@@ -56,7 +66,6 @@ abstract class APIBaseClass extends \atoum {
                             'enable_api_login_credentials'    => true,
                             'enable_api_login_external_token' => true]);
    }
-
 
    /**
     * @tags   api

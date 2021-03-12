@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -409,6 +409,7 @@ class Ajax {
             active: $selected_tab,
             // Loading indicator
             beforeLoad: function (event, ui) {
+
                if ($(ui.panel).html()
                    && !forceReload$rand) {
                   event.preventDefault();
@@ -433,14 +434,18 @@ class Ajax {
                      }
                   });
                }
-
-               var tabs = ui.tab.parent().children();
-               if (tabs.length > 1) {
-                  var newIndex = tabs.index(ui.tab);
-                  $.get(
-                     '".$CFG_GLPI['root_doc']."/ajax/updatecurrenttab.php',
-                     { itemtype: '".addslashes($type)."', id: '$ID', tab: newIndex }
-                  );
+               // We need to manually set the current tab if the main event was prevented.
+               // It happens when user switch between tabs and then select a tab that was already shown before.
+               // It is displayed without having to be reloaded.
+               if (event.isDefaultPrevented()) {
+                  var tabs = ui.tab.parent().children();
+                  if (tabs.length > 1) {
+                     var newIndex = tabs.index(ui.tab);
+                     $.get(
+                        '".$CFG_GLPI['root_doc']."/ajax/updatecurrenttab.php',
+                        { itemtype: '".addslashes($type)."', id: '$ID', tab: newIndex }
+                     );
+                  }
                }
             },
             load: function(event) {
@@ -482,7 +487,7 @@ class Ajax {
 
                // remove scroll event bind, select2 bind it on parent with scrollbars (the tab currently)
                // as the select2 disapear with this tab reload, remove the event to prevent issues (infinite scroll to top)
-               $('#tabs$rand .ui-tabs-panel[aria-expanded=true]').unbind('scroll');
+               $('#tabs$rand .ui-tabs-panel[aria-hidden=false]').unbind('scroll');
 
                // Save tab
                var currenthref = $('#tabs$rand ul>li a').eq(current_index).attr('href');

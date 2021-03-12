@@ -3,7 +3,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -55,6 +55,7 @@ use Dropdown;
 use CommonITILTask;
 use User;
 use DateInterval;
+use Entity;
 
 trait PlanningEvent {
 
@@ -423,8 +424,12 @@ trait PlanningEvent {
          }
       }
 
-      if ($whogroup > 0 && $itemtype == 'Reminder') {
-         $ngrouppriv = ["glpi_groups_reminders.groups_id" => $whogroup];
+      if ($whogroup > 0) {
+         if ($itemtype == 'Reminder') {
+            $ngrouppriv = ["glpi_groups_reminders.groups_id" => $whogroup];
+         } else {
+            $ngrouppriv = [$itemtype::getTableField('groups_id') => $whogroup];
+         }
          if (!empty($nreadpriv)) {
             $nreadpriv['OR'] = [$nreadpriv, $ngrouppriv];
          } else {
@@ -894,7 +899,7 @@ trait PlanningEvent {
             'id'            => '80',
             'table'         => 'glpi_entities',
             'field'         => 'completename',
-            'name'          => __('Entity'),
+            'name'          => Entity::getTypeName(1),
             'datatype'      => 'dropdown'
          ], [
             'id'            => '3',
@@ -967,7 +972,7 @@ trait PlanningEvent {
             'id'            => '70',
             'table'         => User::getTable(),
             'field'         => 'name',
-            'name'          => __('User'),
+            'name'          => User::getTypeName(1),
             'datatype'      => 'dropdown',
             'right'         => 'all'
          ];
@@ -1008,7 +1013,7 @@ trait PlanningEvent {
             'id'            => '11',
             'table'         => $this->getTable(),
             'field'         => 'comment',
-            'name'          => __('Comment'),
+            'name'          => _n('Comment', 'Comments', 1),
             'massiveaction' => false,
             'datatype'      => 'text',
          ];

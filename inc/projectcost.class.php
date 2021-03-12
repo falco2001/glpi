@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -166,7 +166,7 @@ class ProjectCost extends CommonDBChild {
          'id'                 => '14',
          'table'              => $this->getTable(),
          'field'              => 'cost',
-         'name'               => __('Cost'),
+         'name'               => _n('Cost', 'Costs', 1),
          'datatype'           => 'decimal'
       ];
 
@@ -174,7 +174,7 @@ class ProjectCost extends CommonDBChild {
          'id'                 => '18',
          'table'              => 'glpi_budgets',
          'field'              => 'name',
-         'name'               => _n('Budget', 'Budgets', 1),
+         'name'               => Budget::getTypeName(1),
          'datatype'           => 'dropdown'
       ];
 
@@ -182,32 +182,12 @@ class ProjectCost extends CommonDBChild {
          'id'                 => '80',
          'table'              => 'glpi_entities',
          'field'              => 'completename',
-         'name'               => __('Entity'),
+         'name'               => Entity::getTypeName(1),
          'massiveaction'      => false,
          'datatype'           => 'dropdown'
       ];
 
       return $tab;
-   }
-
-   /**
-    * get the request results to get items associated to the given one (defined by $itemtype and $items_id)
-    *
-    * @param string  $itemtype          the type of the item we want the resulting items to be associated to
-    * @param string  $items_id          the name of the item we want the resulting items to be associated to
-    *
-    * @return array the items associated to the given one (empty if none was found)
-    **/
-   static function getItemsAssociationRequest($itemtype, $items_id) {
-      global $DB;
-
-      return $DB->request([
-         'SELECT' => 'id',
-         'FROM'   => static::getTable(),
-         'WHERE'  => [
-            static::$items_id  => $items_id
-         ]
-      ]);
    }
 
 
@@ -311,7 +291,7 @@ class ProjectCost extends CommonDBChild {
       echo "<input type='hidden' name='projects_id' value='".$this->fields['projects_id']."'>";
       Html::autocompletionTextField($this, 'name');
       echo "</td>";
-      echo "<td>".__('Cost')."</td>";
+      echo "<td>"._n('Cost', 'Costs', 1)."</td>";
       echo "<td>";
       echo "<input type='text' name='cost' value='".Html::formatNumber($this->fields["cost"], true)."'
              size='14'>";
@@ -333,7 +313,7 @@ class ProjectCost extends CommonDBChild {
       Html::showDateField("end_date", ['value' => $this->fields['end_date']]);
       echo "</td></tr>";
 
-      echo "<tr class='tab_bg_1'><td>".__('Budget')."</td>";
+      echo "<tr class='tab_bg_1'><td>".Budget::getTypeName(1)."</td>";
       echo "<td>";
       Budget::dropdown(['value' => $this->fields["budgets_id"]]);
       echo "</td></tr>";
@@ -398,8 +378,8 @@ class ProjectCost extends CommonDBChild {
          echo "<tr><th>".__('Name')."</th>";
          echo "<th>".__('Begin date')."</th>";
          echo "<th>".__('End date')."</th>";
-         echo "<th>".__('Budget')."</th>";
-         echo "<th>".__('Cost')."</th>";
+         echo "<th>".Budget::getTypeName(1)."</th>";
+         echo "<th>"._n('Cost', 'Costs', 1)."</th>";
          echo "</tr>";
 
          Session::initNavigateListItems(__CLASS__,

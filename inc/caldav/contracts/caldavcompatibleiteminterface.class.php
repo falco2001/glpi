@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -74,6 +74,8 @@ interface CalDAVCompatibleItemInterface {
 
    /**
     * Get input array from a VCalendar object.
+    *
+    * @param VCalendar $vcalendar
     *
     * @return array
     *

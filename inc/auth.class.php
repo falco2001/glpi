@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -57,8 +57,13 @@ class Auth extends CommonGLPI {
    public $user_present = 0;
    /** @var int Indicates if the user password expired */
    public $password_expired = false;
-   /** @var int Indicates if the user is deleted in the directory (doesn't mean that it can login) */
-   public $user_deleted_ldap = 0;
+
+   /**
+    * Indicated if user was found in the directory.
+    * @var boolean
+    */
+   public $user_found = false;
+
    /** @var resource|boolean LDAP connection descriptor */
    public $ldap_connection;
    /** @var bool Store user LDAP dn */
@@ -188,6 +193,9 @@ class Auth extends CommonGLPI {
          if ($protocol === null) {
             throw new \RuntimeException(sprintf(__('Unsupported mail server type:%s.'), $config['type']));
          }
+         if ($config['validate-cert'] === false) {
+            $protocol->setNoValidateCert(true);
+         }
          $protocol->connect(
             $config['address'],
             $config['port'],
@@ -223,7 +231,7 @@ class Auth extends CommonGLPI {
       }
 
       $this->ldap_connection   = AuthLDAP::tryToConnectToServer($ldap_method, $login, $password);
-      $this->user_deleted_ldap = false;
+      $this->user_found = false;
 
       if ($this->ldap_connection) {
          $params = [
@@ -254,7 +262,8 @@ class Auth extends CommonGLPI {
          }
 
          $dn = $infos['dn'];
-         if (!empty($dn) && @ldap_bind($this->ldap_connection, $dn, $password)) {
+         $this->user_found = $dn != '';
+         if ($this->user_found && @ldap_bind($this->ldap_connection, $dn, $password)) {
 
             //Hook to implement to restrict access by checking the ldap directory
             if (Plugin::doHookFunction("restrict_ldap_auth", $infos)) {
@@ -268,9 +277,6 @@ class Auth extends CommonGLPI {
             // Incorrect login
             $this->addToError(__('Incorrect username or password'));
             //Use is not present anymore in the directory!
-            if ($dn == '') {
-               $this->user_deleted_ldap = true;
-            }
             return false;
          }
 
@@ -676,10 +682,11 @@ class Auth extends CommonGLPI {
    /**
     * Manage use authentication and initialize the session
     *
-    * @param string  $login_name     Login
-    * @param string  $login_password Password
-    * @param boolean $noauto         (false by default)
-    * @param string $login_auth      type of auth - id of the auth
+    * @param string  $login_name      Login
+    * @param string  $login_password  Password
+    * @param boolean $noauto          (false by default)
+    * @param bool    $remember_me
+    * @param string  $login_auth      Type of auth - id of the auth
     *
     * @return boolean (success)
     */
@@ -779,6 +786,7 @@ class Auth extends CommonGLPI {
                         $user_dn = false;
                      }
                      if ($user_dn) {
+                        $this->user_found = true;
                         $this->user->fields['auths_id'] = $ldap_method['id'];
                         $this->user->getFromLDAP($ds, $ldap_method, $user_dn['dn'], $login_name,
                                                  !$this->user_present);
@@ -801,8 +809,7 @@ class Auth extends CommonGLPI {
                   } else if (!$user_dn && $this->user_present) {
                      //If user is set as present in GLPI but no LDAP DN found : it means that the user
                      //is not present in an ldap directory anymore
-                     $user_deleted_ldap       = true;
-                     $this->user_deleted_ldap = true;
+                     $user_deleted_ldap = true;
                      $this->addToError(_n('User not found in LDAP directory',
                                           'User not found in LDAP directories',
                                            count($ldapservers)));
@@ -841,15 +848,16 @@ class Auth extends CommonGLPI {
                   if (Toolbox::canUseLdap()) {
                      AuthLDAP::tryLdapAuth($this, $login_name, $login_password,
                                              $this->user->fields["auths_id"]);
-                     if (!$this->auth_succeded && $this->user_deleted_ldap) {
+                     if (!$this->auth_succeded && !$this->user_found) {
                         $search_params = [
                            'name'     => addslashes($login_name),
                            'authtype' => $this::LDAP];
                         if (!empty($login_auth)) {
                            $search_params['auths_id'] = $this->user->fields["auths_id"];
                         }
-                        $this->user->getFromDBByCrit($search_params);
-                        $user_deleted_ldap = true;
+                        if ($this->user->getFromDBByCrit($search_params)) {
+                           $user_deleted_ldap = true;
+                        };
                      }
                   }
                }
@@ -912,6 +920,9 @@ class Auth extends CommonGLPI {
                // Then ensure addslashes
                $input = Toolbox::addslashes_deep($input);
                unset ($this->user->fields);
+               if ($authtype == self::EXTERNAL && !isset($input["authtype"])) {
+                  $input["authtype"] = $authtype;
+               }
                $this->user->add($input);
             } else {
                // Auto add not enable so auth failed
@@ -1076,7 +1087,7 @@ class Auth extends CommonGLPI {
                //TRANS: %1$s is the auth method type, %2$s the auth method name or link
                return sprintf(__('%1$s: %2$s'), AuthLDAP::getTypeName(1), $auth->getLink());
             }
-            return sprintf(__('%1$s: %2$s'), __('LDAP directory'), $name);
+            return sprintf(__('%1$s: %2$s'), AuthLDAP::getTypeName(1), $name);
 
          case self::MAIL :
             $auth = new AuthMail();
@@ -1475,7 +1486,7 @@ class Auth extends CommonGLPI {
          echo "</td>";
          echo "</tr>\n";
          //TRANS: for CAS SSO system
-         echo "<tr class='tab_bg_2'><td class='center'>" . __('Port') . "</td>";
+         echo "<tr class='tab_bg_2'><td class='center'>" . _n('Port', 'Ports', 1) . "</td>";
          echo "<td><input type='text' name='cas_port' value=\"".$CFG_GLPI["cas_port"]."\"></td></tr>\n";
          //TRANS: for CAS SSO system
          echo "<tr class='tab_bg_2'><td class='center'>" . __('Root directory (optional)')."</td>";
@@ -1495,7 +1506,7 @@ class Auth extends CommonGLPI {
             echo "</p>";
          }
          echo "<p>" .__('Impossible to use CAS as external source of connection')."</p>";
-         echo "<p><strong>".GLPINetwork::getErrorMessage()."</strong></p>";
+         echo "<p><strong>".GLPINetwork::getSupportPromoteMessage()."</strong></p>";
 
          echo "</td></tr>\n";
       }
@@ -1529,7 +1540,7 @@ class Auth extends CommonGLPI {
       }
       echo "</th></tr>\n";
       echo "<tr class='tab_bg_2'>";
-      echo "<td class='center'>". __('Field storage of the login in the HTTP request')."</td>";
+      echo "<td class='center'>". SsoVariable::getTypeName(1)."</td>";
       echo "<td>";
       SsoVariable::dropdown(['name'  => 'ssovariables_id',
                                   'value' => $CFG_GLPI["ssovariables_id"]]);
@@ -1575,7 +1586,7 @@ class Auth extends CommonGLPI {
       echo "</tr>\n";
 
       echo "<tr class='tab_bg_2'>";
-      echo "<td class='center'>" . __('Email') . "</td>";
+      echo "<td class='center'>" . _n('Email', 'Emails', 1) . "</td>";
       echo "<td><input type='text' name='email1_ssofield' value='".$CFG_GLPI['email1_ssofield']."'>";
       echo "</td>";
        echo "</tr>\n";
@@ -1599,7 +1610,7 @@ class Auth extends CommonGLPI {
       echo "</tr>\n";
 
       echo "<tr class='tab_bg_2'>";
-      echo "<td class='center'>" . __('Phone') . "</td>";
+      echo "<td class='center'>" . Phone::getTypeName(1) . "</td>";
       echo "<td><input type='text' name='phone_ssofield' value='".$CFG_GLPI['phone_ssofield']."'>";
       echo "</td>";
       echo "</tr>\n";

@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -152,7 +152,7 @@ function display_infocoms_report($itemtype, $begin, $end) {
 
       echo "<table class='tab_cadre'><tr><th>".__('Name')."</th>";
       if ($display_entity) {
-         echo "<th>".__('Entity')."</th>";
+         echo "<th>".Entity::getTypeName(1)."</th>";
       }
 
       echo "<th>"._x('price', 'Value')."</th><th>".__('ANV')."</th>";

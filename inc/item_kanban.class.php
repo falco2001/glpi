@@ -3,7 +3,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -177,12 +177,12 @@ class Item_Kanban extends CommonDBRelation {
       }
 
       if (!$found) {
-         array_push($state, [
-            'column'    => $column,
-            'visible'   => true,
-            'folded'    => false,
-            'cards'     => []
-         ]);
+         $state[] = [
+            'column' => $column,
+            'visible' => true,
+            'folded' => false,
+            'cards' => []
+         ];
       }
       self::saveStateForItem($itemtype, $items_id, $state);
    }

@@ -1,7 +1,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -44,7 +44,7 @@ $(function() {
    var bindFilterChange = function () {
       // Workaround to prevent opening of dropdown when removing item using the "x" button.
       // Without this workaround, orphan dropdowns remains in page when reloading tab.
-      $('.log_history_filter_row .select2-hidden-accessible').on('select2:unselecting', function(ev) {
+      $(document).on('select2:unselecting', '.log_history_filter_row .select2-hidden-accessible', function(ev) {
          if (ev.params.args.originalEvent) {
             ev.params.args.originalEvent.stopPropagation();
          }

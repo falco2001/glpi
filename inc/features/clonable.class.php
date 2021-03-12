@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -54,7 +54,6 @@ trait Clonable {
       parent::post_clone($source, $history);
 
       $clone_relations = $this->getCloneRelations();
-      $override_input['items_id'] = $this->getID();
       foreach ($clone_relations as $classname) {
          if (!is_a($classname, CommonDBConnexity::class, true)) {
             Toolbox::logWarning(
@@ -66,6 +65,7 @@ trait Clonable {
             continue;
          }
 
+         $override_input[$classname::getItemField($this->getType())] = $this->getID();
          $relation_items = $classname::getItemsAssociatedTo($this->getType(), $source->getID());
          foreach ($relation_items as $relation_item) {
             $relation_item->clone($override_input, $history);

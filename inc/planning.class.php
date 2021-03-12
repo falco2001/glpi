@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -62,7 +62,7 @@ class Planning extends CommonGLPI {
                               '#364959', '#8C5344', '#FF8100', '#F600C4', '#0017FF',
                               '#000000', '#FFFFFF', '#005800', '#925EFF'];
 
-   static $directgroup_itemtype = ['ProjectTask', 'TicketTask', 'ProblemTask', 'ChangeTask'];
+   static $directgroup_itemtype = ['PlanningExternalEvent', 'ProjectTask', 'TicketTask', 'ProblemTask', 'ChangeTask'];
 
    const READMY    =    1;
    const READGROUP = 1024;
@@ -1023,11 +1023,11 @@ class Planning extends CommonGLPI {
       echo "<form action='".self::getFormURL()."'>";
       echo __("Actor").": <br>";
 
-      $planning_types = ['user' => __("User")];
+      $planning_types = ['user' => User::getTypeName(1)];
 
       if (Session::haveRightsOr('planning', [self::READGROUP, self::READALL])) {
          $planning_types['group_users'] = __('All users of a group');
-         $planning_types['group']       = __('Group');
+         $planning_types['group']       = Group::getTypeName(1);
       }
 
       $planning_types['external'] = __('External calendar');
@@ -1064,7 +1064,7 @@ class Planning extends CommonGLPI {
             $used[] = $actor[1];
          }
       }
-      echo __("User")." :<br>";
+      echo User::getTypeName(1)." :<br>";
 
       // show only users with right to add planning events
       $rights = ['change', 'problem', 'reminder', 'task', 'projecttask'];
@@ -1110,7 +1110,7 @@ class Planning extends CommonGLPI {
     * @return void
     */
    static function showAddGroupUsersForm() {
-      echo __("Group")." : <br>";
+      echo Group::getTypeName(1)." : <br>";
 
       $condition = ['is_task' => 1];
       // filter groups
@@ -1212,7 +1212,7 @@ class Planning extends CommonGLPI {
          $condition['id'] = $_SESSION['glpigroups'];
       }
 
-      echo __("Group")." : <br>";
+      echo Group::getTypeName(1)." : <br>";
       Group::dropdown([
          'entity'      => $_SESSION['glpiactive_entity'],
          'entity_sons' => $_SESSION['glpiactive_entity_recursive'],
@@ -1547,7 +1547,7 @@ class Planning extends CommonGLPI {
          $input[$key] = $event['actor']['items_id'];
       }
 
-      $new_items_id = $item->add($input);
+      $new_items_id = $item->add(Toolbox::addslashes_deep($input));
 
       // manage all assigments for ProjectTask
       if ($item instanceof ProjectTask
@@ -1772,8 +1772,8 @@ class Planning extends CommonGLPI {
          $users_id = (isset($event['users_id_tech']) && !empty($event['users_id_tech'])?
                         $event['users_id_tech']:
                         $event['users_id']);
-         $content = $event['content'] ?? Planning::displayPlanningItem($event, $users_id, 'in', false);
-         $tooltip = $event['tooltip'] ?? Planning::displayPlanningItem($event, $users_id, 'in', true);
+         $content = Planning::displayPlanningItem($event, $users_id, 'in', false) ?: ($event['content'] ?? "");
+         $tooltip = Planning::displayPlanningItem($event, $users_id, 'in', true) ?: ($event['tooltip'] ?? "");
 
          // dates should be set with the user timezone
          $begin = $event['begin'];
@@ -2256,7 +2256,10 @@ class Planning extends CommonGLPI {
       }
 
       // Plugins case
-      if (isset($val['itemtype']) && !empty($val['itemtype']) && $val['itemtype'] != 'NotPlanned') {
+      if (isset($val['itemtype'])
+          && !empty($val['itemtype'])
+          && $val['itemtype'] != 'NotPlanned'
+          && method_exists($val['itemtype'], "displayPlanningItem")) {
          $html.= $val['itemtype']::displayPlanningItem($val, $who, $type, $complete);
       }
 

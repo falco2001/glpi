@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -48,7 +48,7 @@ if (isset($_POST["add"])) {
    $domain->check(-1, CREATE, $_POST);
    $newID = $domain->add($_POST);
    if ($_SESSION['glpibackcreated']) {
-      Html::redirect($domain->getFormURLWithID($newID));
+      Html::redirect($domain->getLinkURL());
    }
    Html::back();
 } else if (isset($_POST["delete"])) {

@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -31,13 +31,12 @@
  */
 
 if (!defined('GLPI_ROOT')) {
-   die("Sorry. You can't access directly to this file");
+   die("Sorry. You can't access this file directly");
 }
 
 class ApplianceEnvironment extends CommonDropdown {
 
    static function getTypeName($nb = 0) {
-      return _n('Appliance environment', 'Appliances environments', $nb);
+      return _n('Appliance environment', 'Appliance environments', $nb);
    }
-
 }

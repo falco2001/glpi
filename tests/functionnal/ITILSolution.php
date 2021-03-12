@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -33,6 +33,7 @@
 namespace tests\units;
 
 use \DbTestCase;
+use Ticket;
 
 /* Test for inc/itilsolution.class.php */
 
@@ -293,9 +294,13 @@ class ITILSolution extends DbTestCase {
             'content'   => '2nd solution, should be refused!'
          ])
       )->isFalse();
+      $this->hasSessionMessages(ERROR, ['The item is already solved, did anyone pushed a solution before you ?']);
    }
 
    public function testScreenshotConvertedIntoDocument() {
+
+      $this->login(); // must be logged as ITILSolution uses Session::getLoginUserID()
+
       // Test uploads for item creation
       $ticket = new \Ticket();
       $ticket->add([
@@ -353,5 +358,41 @@ class ITILSolution extends DbTestCase {
       $this->boolean($success)->isTrue();
       $expected = 'a href=&quot;/front/document.send.php?docid=';
       $this->string($instance->fields['content'])->contains($expected);
+   }
+
+   public function testAddMultipleSolution() {
+
+      $this->login(); // must be logged as ITILSolution uses Session::getLoginUserID()
+
+      $em_ticket = new Ticket();
+      $em_solution = new \ITILSolution();
+
+      $tickets = [];
+
+      // Create 10 tickets
+      for ($i=0; $i<10; $i++) {
+         $id = $em_ticket->add([
+            'name'    => "test",
+            'content' => "test",
+         ]);
+         $this->integer($id);
+
+         $ticket = new Ticket();
+         $ticket->getFromDB($id);
+         $tickets[] = $ticket;
+      }
+
+      // Solve all created tickets
+      foreach ($tickets as $ticket) {
+         $id = $em_solution->add([
+            'itemtype' => $ticket::getType(),
+            'items_id' => $ticket->fields['id'],
+            'content'  => 'test'
+         ]);
+         $this->integer($id);
+
+         $ticket->getFromDB($ticket->fields['id']);
+         $this->integer($ticket->fields['status'])->isEqualTo(Ticket::SOLVED);
+      }
    }
 }

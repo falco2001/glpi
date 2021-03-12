@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -70,12 +70,12 @@ class DomainRelation extends CommonDropdown {
    /**
     * Print the form
     *
-    * @param $ID        integer ID of the item
-    * @param $options   array of possible options:
+    * @param integer $ID       Integer ID of the item
+    * @param array   $options  Array of possible options:
     *     - target for the Form
     *     - withtemplate : template or basic item
     *
-    * @return void
+    * @return void|boolean (display) Returns false if there is a rights error.
     **/
    function showForm($ID, $options = []) {
 

@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -32,14 +32,35 @@
 
 namespace Glpi\Dashboard;
 
+use CommonGLPI;
+use DBConnection;
+use QueryExpression;
+use Change;
+use CommonITILActor;
+use CommonITILValidation;
+use CommonTreeDropdown;
+use CommonDBTM;
+use CommonITILObject;
+use Group;
+use Group_Ticket;
+use Problem;
+use QuerySubQuery;
+use Session;
+use Search;
+use Stat;
+use Ticket;
+use Ticket_User;
+use Toolbox;
+use User;
+
 if (!defined('GLPI_ROOT')) {
    die("Sorry. You can't access this file directly");
 }
 
 /**
- * Central class
+ * Provider class
 **/
-class Provider extends \CommonGLPI {
+class Provider extends CommonGLPI {
 
 
    /**
@@ -47,40 +68,66 @@ class Provider extends \CommonGLPI {
     *
     * @param CommonDBTM|null object to count
     *
+    * @param array $params default values for
+    * - 'apply_filters' values from dashboard filters
+    *
     * @return array :
     * - 'number'
     * - 'url'
     * - 'label'
     * - 'icon'
     */
-   static function bigNumberItem(\CommonDBTM $item = null): array {
-      $DB = \DBConnection::getReadConnection();
+   static function bigNumberItem(CommonDBTM $item = null, array $params = []): array {
+      $DB = DBConnection::getReadConnection();
 
-      $criteria = [];
+      $default_params = [
+         'apply_filters'  => [],
+      ];
+      $params = array_merge($default_params, $params);
+
+      $i_table = $item::getTable();
+
+      $where = [];
       if (isset($item->fields['is_deleted'])) {
-         $criteria['is_deleted'] = 0;
+         $where['is_deleted'] = 0;
       }
 
       if (isset($item->fields['is_template'])) {
-         $criteria['is_template'] = 0;
+         $where['is_template'] = 0;
       }
 
       if ($item->isEntityAssign()) {
-         $criteria += getEntitiesRestrictCriteria($item::getTable());
+         $where += getEntitiesRestrictCriteria($item::getTable());
       }
 
-      $iterator = $DB->request([
-         'COUNT'  => 'cpt',
-         'FROM'   => $item::getTable(),
-         'WHERE'  => $criteria
-      ]);
+      $criteria = array_merge_recursive(
+         [
+            'SELECT' => ['COUNT DISTINCT' => $item::getTableField($item::getIndexName()) . ' as cpt'],
+            'FROM'   => $i_table,
+            'WHERE'  => $where
+         ],
+         self::getFiltersCriteria($i_table, $params['apply_filters']),
+         $item instanceof Ticket ? Ticket::getCriteriaFromProfile() : []
+      );
+      $iterator = $DB->request($criteria);
 
       $result   = $iterator->next();
       $nb_items = $result['cpt'];
 
+      $search_criteria = [
+         [
+            self::getSearchFiltersCriteria($i_table, $params['apply_filters'])
+         ]
+      ];
+
+      $url = $item::getSearchURL()."?".Toolbox::append_params([
+         $search_criteria,
+         'reset' => 'reset',
+      ]);
+
       return [
          'number' => $nb_items,
-         'url'    => $item::getSearchURL()."?reset",
+         'url'    => $url,
          'label'  => $item::getTypeName($nb_items),
          'icon'   => $item::getIcon(),
       ];
@@ -97,7 +144,7 @@ class Provider extends \CommonGLPI {
          if (is_subclass_of($itemtype, 'CommonDBTM')) {
             $item = new $itemtype;
             $item->getEmpty();
-            return self::bigNumberItem($item);
+            return self::bigNumberItem($item, $arguments[0] ?? []);
          }
       }
 
@@ -115,6 +162,15 @@ class Provider extends \CommonGLPI {
                new $fk_itemtype,
                $arguments[0] ?? []
             );
+         }
+      }
+
+      if (strpos($name, 'getArticleList') !== false) {
+         $itemtype = str_replace('getArticleList', '', $name);
+         if (is_subclass_of($itemtype, 'CommonDBTM')) {
+            $item = new $itemtype;
+            $item->getEmpty();
+            return self::articleListItem($item, $arguments[0] ?? []);
          }
       }
    }
@@ -136,6 +192,7 @@ class Provider extends \CommonGLPI {
     * @param array $params default values for
     * - 'title' of the card
     * - 'icon' of the card
+    * - 'apply_filters' values from dashboard filters
     *
     * @return array :
     * - 'number'
@@ -147,11 +204,12 @@ class Provider extends \CommonGLPI {
       string $case = "",
       array $params = []
    ):array {
-      $DBread = \DBConnection::getReadConnection();
+      $DBread = DBConnection::getReadConnection();
 
       $default_params = [
-         'label' => "",
-         'icon'  => \Ticket::getIcon(),
+         'label'         => "",
+         'icon'          => Ticket::getIcon(),
+         'apply_filters' => [],
       ];
       $params = array_merge($default_params, $params);
 
@@ -166,20 +224,28 @@ class Provider extends \CommonGLPI {
          'value'      => 'notold',
       ];
 
-      $table = \Ticket::getTable();
+      $table = Ticket::getTable();
       $query_criteria = [
-         'FROM'    => $table,
-         'WHERE'   => getEntitiesRestrictCriteria($table) + [
-            "$table.is_deleted" => 0,
+         'SELECT'    => [
+            'COUNT DISTINCT' => "$table.id AS cpt",
          ],
-         'GROUPBY' => "$table.id"
+         'FROM'   => $table,
+         'WHERE'  => [
+            "$table.is_deleted" => 0,
+         ] + getEntitiesRestrictCriteria($table),
       ];
+
+      $query_criteria = array_merge_recursive(
+         $query_criteria,
+         Ticket::getCriteriaFromProfile(),
+         self::getFiltersCriteria($table, $params['apply_filters'])
+      );
 
       switch ($case) {
          case 'notold':
             $search_criteria = [$notold];
             $query_criteria['WHERE']+= [
-               "$table.status" => \Ticket::getNotSolvedStatusArray(),
+               "$table.status" => Ticket::getNotSolvedStatusArray(),
             ];
          break;
 
@@ -213,13 +279,13 @@ class Provider extends \CommonGLPI {
                   ]
                ]
             ]);
-            $query_criteria['WHERE']+= [
-               "$table.status" => \Ticket::getNotSolvedStatusArray(),
+            $query_criteria['WHERE']["$table.status"] = Ticket::getNotSolvedStatusArray();
+            $query_criteria['WHERE'][] = [
                'OR' => [
-                  'time_to_resolve'          => ['<', new \QueryExpression('NOW()')],
-                  'time_to_own'              => ['<', new \QueryExpression('NOW()')],
-                  'internal_time_to_own'     => ['<', new \QueryExpression('NOW()')],
-                  'internal_time_to_resolve' => ['<', new \QueryExpression('NOW()')],
+                  CommonITILObject::generateSLAOLAComputation('time_to_resolve', 'glpi_tickets'),
+                  CommonITILObject::generateSLAOLAComputation('internal_time_to_resolve', 'glpi_tickets'),
+                  CommonITILObject::generateSLAOLAComputation('time_to_own', 'glpi_tickets'),
+                  CommonITILObject::generateSLAOLAComputation('internal_time_to_own', 'glpi_tickets'),
                ]
             ];
             break;
@@ -231,12 +297,12 @@ class Provider extends \CommonGLPI {
                [
                   'field'      => 55,
                   'searchtype' => 'equals',
-                  'value'      => \CommonITILValidation::WAITING,
+                  'value'      => CommonITILValidation::WAITING,
                ],  [
                   'link'       => 'AND',
                   'field'      => 59,
                   'searchtype' => 'equals',
-                  'value'      => \Session::getLoginUserID(),
+                  'value'      => Session::getLoginUserID(),
                ]
             ];
             $query_criteria = array_merge_recursive($query_criteria, [
@@ -249,56 +315,56 @@ class Provider extends \CommonGLPI {
                   ]
                ],
                'WHERE' => [
-                  'glpi_ticketvalidations.status'            => \CommonITILValidation::WAITING,
-                  'glpi_ticketvalidations.users_id_validate' => \Session::getLoginUserID()
+                  'glpi_ticketvalidations.status'            => CommonITILValidation::WAITING,
+                  'glpi_ticketvalidations.users_id_validate' => Session::getLoginUserID()
                ]
             ]);
             break;
 
          // Statuses speciale cases (no break)
          case 'incoming':
-            $status = \Ticket::INCOMING;
-            $params['icon']  = \Ticket::getIcon();
+            $status = Ticket::INCOMING;
+            $params['icon']  = Ticket::getIcon();
             $params['label'] = __("Incoming tickets");
             $skip = true;
          case 'waiting':
             if (!$skip) {
-               $status =\Ticket::WAITING;
+               $status =Ticket::WAITING;
                $params['icon']  = "fas fa-pause-circle";
                $params['label'] = __("Pending tickets");
                $skip = true;
             }
          case 'assigned':
             if (!$skip) {
-               $status = \Ticket::ASSIGNED;
+               $status = Ticket::ASSIGNED;
                $params['icon']  = "fas fa-users";
                $params['label'] = __("Assigned tickets");
                $skip = true;
             }
          case 'planned':
             if (!$skip) {
-               $status = \Ticket::PLANNED;
+               $status = Ticket::PLANNED;
                $params['icon']  = "fas fa-calendar-check";
                $params['label'] = __("Planned tickets");
                $skip = true;
             }
          case 'solved':
             if (!$skip) {
-               $status = \Ticket::SOLVED;
+               $status = Ticket::SOLVED;
                $params['icon']  = "far fa-check-square";
                $params['label'] = __("Solved tickets");
                $skip = true;
             }
          case 'closed':
             if (!$skip) {
-               $status = \Ticket::CLOSED;
+               $status = Ticket::CLOSED;
                $params['icon']  = "fas fa-archive";
                $params['label'] = __("Closed tickets");
                $skip = true;
             }
          case 'status':
             if (!$skip) {
-               $status = \Ticket::INCOMING;
+               $status = Ticket::INCOMING;
             }
             $search_criteria = [
                [
@@ -315,15 +381,16 @@ class Provider extends \CommonGLPI {
             break;
       }
 
-      $url = \Ticket::getSearchURL()."?".\Toolbox::append_params([
+      $search_criteria['criteria'] = self::getSearchFiltersCriteria($table, $params['apply_filters']);
+
+      $url = Ticket::getSearchURL()."?".Toolbox::append_params([
          'criteria' => $search_criteria,
          'reset'    => 'reset'
       ]);
 
       $iterator   = $DBread->request($query_criteria);
-      if ($nb_tickets === 0) {
-         $nb_tickets = count($iterator);
-      }
+      $result     = $iterator->next();
+      $nb_tickets = $result['cpt'];
 
       return [
          'number'     => $nb_tickets,
@@ -339,14 +406,15 @@ class Provider extends \CommonGLPI {
    /**
     * Get multiple counts of computer by a specific foreign key
     *
-    * @param \CommonDBTM $item main item to count
-    * @param \CommonDBTM $fk_item groupby by this item (we will find the foreign key in the main item)
+    * @param CommonDBTM $item main item to count
+    * @param CommonDBTM $fk_item groupby by this item (we will find the foreign key in the main item)
     * @param array $params values for:
     * - 'title' of the card
     * - 'icon' of the card
     * - 'searchoption_id' id corresponding to FK search option
     * - 'limit' max data to return
     * - 'join_key' LEFT, INNER, etc JOIN
+    * - 'apply_filters' values from dashboard filters
     *
     * @return array :
     * - 'data': [
@@ -358,11 +426,11 @@ class Provider extends \CommonGLPI {
     * - 'icon'
     */
    public static function nbItemByFk(
-      \CommonDBTM $item = null,
-      \CommonDBTM $fk_item = null,
+      CommonDBTM $item = null,
+      CommonDBTM $fk_item = null,
       array $params = []
    ): array {
-      $DB = \DBConnection::getReadConnection();
+      $DB = DBConnection::getReadConnection();
 
       $c_table     = $item::getTable();
       $fk_table    = $fk_item::getTable();
@@ -382,6 +450,7 @@ class Provider extends \CommonGLPI {
          'icon'            => $fk_item::getIcon() ?? $item::getIcon(),
          'limit'           => 50,
          'join_key'        => 'LEFT JOIN',
+         'apply_filters'   => [],
       ];
       $params = array_merge($default_params, $params);
 
@@ -394,7 +463,7 @@ class Provider extends \CommonGLPI {
       }
 
       $name = 'name';
-      if ($fk_item instanceof \CommonTreeDropdown) {
+      if ($fk_item instanceof CommonTreeDropdown) {
          $name = 'completename';
       }
 
@@ -402,27 +471,31 @@ class Provider extends \CommonGLPI {
          $where += getEntitiesRestrictCriteria($c_table, '', '', $item->maybeRecursive());
       }
 
-      $iterator = $DB->request([
-         'SELECT'    => [
-            "$fk_table.$name AS fk_name",
-            "$fk_table.id AS fk_id",
-            'COUNT' => "$c_table.id AS cpt",
-         ],
-         'DISTINCT'  => true,
-         'FROM'      => $c_table,
-         $params['join_key'] => [
-            $fk_table => [
-               'ON' => [
-                  $fk_table => 'id',
-                  $c_table  => getForeignKeyFieldForItemType($fk_itemtype),
+      $criteria = array_merge_recursive(
+         [
+            'SELECT'    => [
+               "$fk_table.$name AS fk_name",
+               "$fk_table.id AS fk_id",
+               'COUNT DISTINCT' => "$c_table.id AS cpt",
+            ],
+            'FROM'      => $c_table,
+            $params['join_key'] => [
+               $fk_table => [
+                  'ON' => [
+                     $fk_table => 'id',
+                     $c_table  => getForeignKeyFieldForItemType($fk_itemtype),
+                  ]
                ]
-            ]
+            ],
+            'GROUPBY'   => "$fk_table.$name",
+            'ORDERBY'   => "cpt DESC",
+            'LIMIT'     => $params['limit'],
          ],
-         'WHERE'     => $where,
-         'GROUPBY'   => "$fk_table.$name",
-         'ORDERBY'   => "cpt DESC",
-         'LIMIT'     => $params['limit'],
-      ]);
+         count($where) ? ['WHERE' => $where] : [],
+         self::getFiltersCriteria($c_table, $params['apply_filters']),
+         $item instanceof Ticket ? Ticket::getCriteriaFromProfile() : []
+      );
+      $iterator = $DB->request($criteria);
 
       $search_criteria = [
          'criteria' => [
@@ -430,10 +503,14 @@ class Provider extends \CommonGLPI {
                'field'      => $params['searchoption_id'],
                'searchtype' => 'equals',
                'value'      => 0
-            ]
             ],
-            'reset' => 'reset',
+            self::getSearchFiltersCriteria($fk_table, $params['apply_filters'])
+         ],
+         'reset' => 'reset',
       ];
+
+      $url = $item::getSearchURL();
+      $url .= (strpos($url, '?') !== false ? '&' : '?') . 'reset';
 
       $data = [];
       foreach ($iterator as $result) {
@@ -441,8 +518,7 @@ class Provider extends \CommonGLPI {
          $data[] = [
             'number' => $result['cpt'],
             'label'  => $result['fk_name'] ?? __("without"),
-            'url'    => $item::getSearchURL()."?reset&".
-               \Toolbox::append_params($search_criteria),
+            'url'    => $url . '&' . Toolbox::append_params($search_criteria),
          ];
       }
 
@@ -461,32 +537,96 @@ class Provider extends \CommonGLPI {
 
 
    /**
+    * Get a list of article for an compatible item (with date,name,text fields)
+    *
+    * @param CommonDBTM $item the itemtype to list
+    * @param array   $params default values for
+    * - 'icon' of the card
+    * - 'apply_filters' values from dashboard filters
+    *
+    * @return array
+    */
+   public static function articleListItem(CommonDBTM $item = null, array $params = []): array {
+      $DB = DBConnection::getReadConnection();
+
+      $default_params = [
+         'icon'          => $item::getIcon(),
+         'apply_filters' => [],
+      ];
+      $params = array_merge($default_params, $params);
+
+      $i_table           = $item::getTable();
+      $criteria = array_merge_recursive(
+         [
+            'SELECT' => "$i_table.*",
+            'FROM'   => $i_table
+         ],
+         self::getFiltersCriteria($i_table, $params['apply_filters'])
+      );
+      $iterator = $DB->request($criteria);
+
+      $data = [];
+      foreach ($iterator as $line) {
+         $data[] = [
+            'date'    => $line['date'] ?? '',
+            'label'   => $line['name'] ?? '',
+            'content' => $line['text'] ?? '',
+            'author'  => User::getFriendlyNameById($line['users_id'] ?? 0),
+            'url'     => $item::getFormURLWithID($line['id']),
+         ];
+      }
+
+      $nb_items = count($data);
+      if ($nb_items === 0) {
+         $data = [
+            'nodata' => true
+         ];
+      }
+
+      return [
+         'data'   => $data,
+         'number' => $nb_items,
+         'url'    => $item::getSearchURL(),
+         'label'  => $item::getTypeName($nb_items),
+         'icon'   => $item::getIcon(),
+      ];
+   }
+
+
+   /**
     * get multiple count of ticket by month
     *
     * @param array $params default values for
     * - 'title' of the card
     * - 'icon' of the card
+    * - 'apply_filters' values from dashboard filters
     *
     * @return array
     */
    public static function ticketsOpened(array $params = []): array {
-      $DB = \DBConnection::getReadConnection();
+      $DB = DBConnection::getReadConnection();
       $default_params = [
-         'label' => "",
-         'icon'  => \Ticket::getIcon(),
+         'label'         => "",
+         'icon'          => Ticket::getIcon(),
+         'apply_filters' => [],
       ];
       $params = array_merge($default_params, $params);
 
-      $t_table = \Ticket::getTable();
-      $iterator = $DB->request([
-         'SELECT' => [
-            'COUNT' => 'id as nb_tickets',
-            new \QueryExpression("DATE_FORMAT(".$DB->quoteName("date").", '%Y-%m') AS ticket_month")
+      $t_table = Ticket::getTable();
+      $criteria = array_merge_recursive(
+         [
+            'SELECT' => [
+               'COUNT' => "$t_table.id as nb_tickets",
+               new QueryExpression("DATE_FORMAT(".$DB->quoteName("date").", '%Y-%m') AS ticket_month")
+            ],
+            'FROM'    => $t_table,
+            'GROUPBY' => 'ticket_month',
+            'ORDER'   => 'ticket_month ASC'
          ],
-         'FROM' => $t_table,
-         'GROUPBY' => 'ticket_month',
-         'ORDER'   => 'ticket_month ASC'
-      ]);
+         Ticket::getCriteriaFromProfile(),
+         self::getFiltersCriteria($t_table, $params['apply_filters'])
+      );
+      $iterator = $DB->request($criteria);
 
       $s_criteria = [
          'criteria' => [
@@ -515,7 +655,7 @@ class Provider extends \CommonGLPI {
          $data[] = [
             'number' => $result['nb_tickets'],
             'label'  => $result['ticket_month'],
-            'url'    => \Ticket::getSearchURL()."?".\Toolbox::append_params($s_criteria),
+            'url'    => Ticket::getSearchURL()."?".Toolbox::append_params($s_criteria),
          ];
       }
 
@@ -534,13 +674,15 @@ class Provider extends \CommonGLPI {
     * @param array $params default values for
     * - 'title' of the card
     * - 'icon' of the card
+    * - 'apply_filters' values from dashboard filters
     *
     * @return array
     */
    public static function getTicketsEvolution(array $params = []): array {
       $default_params = [
-         'label' => "",
-         'icon'  => \Ticket::getIcon(),
+         'label'         => "",
+         'icon'          => Ticket::getIcon(),
+         'apply_filters' => [],
       ];
       $params = array_merge($default_params, $params);
 
@@ -548,12 +690,19 @@ class Provider extends \CommonGLPI {
       $begin  = date("Y-m-d", mktime(1, 0, 0, (int)date("m"), (int)date("d"), $year));
       $end    = date("Y-m-d");
 
-      $total = \Stat::constructEntryValues('Ticket', "inter_total", $begin, $end);
-      $monthsyears = array_keys($total);
+      if (isset($params['apply_filters']['dates'])
+      && count($params['apply_filters']['dates']) == 2) {
+         $begin = date("Y-m-d", strtotime($params['apply_filters']['dates'][0]));
+         $end   = date("Y-m-d", strtotime($params['apply_filters']['dates'][1]));
+         unset($params['apply_filters']['dates']);
+      }
+
+      $t_table   = Ticket::getTable();
+
       $series = [
-         [
-            'name' => _nx('ticket', 'Opened', 'Opened', 2),
-            'data' => array_values($total),
+
+         'inter_total' => [
+            'name'   => _nx('ticket', 'Opened', 'Opened', \Session::getPluralNumber()),
             'search' => [
                'criteria' => [
                   [
@@ -566,13 +715,13 @@ class Provider extends \CommonGLPI {
                      'field'      => 15, // creation date
                      'searchtype' => 'lessthan',
                      'value'      => null
-                  ]
+                  ],self::getSearchFiltersCriteria($t_table, $params['apply_filters']),
                ],
                'reset' => 'reset'
             ]
-         ], [
-            'name' => _nx('ticket', 'Solved', 'Solved', 2),
-            'data' => array_values(\Stat::constructEntryValues('Ticket', "inter_solved", $begin, $end)),
+         ],
+         'inter_solved' => [
+            'name'   => _nx('ticket', 'Solved', 'Solved', \Session::getPluralNumber()),
             'search' => [
                'criteria' => [
                   [
@@ -585,13 +734,13 @@ class Provider extends \CommonGLPI {
                      'field'      => 17, // solve date
                      'searchtype' => 'lessthan',
                      'value'      => null
-                  ]
+                  ],self::getSearchFiltersCriteria($t_table, $params['apply_filters']),
                ],
                'reset' => 'reset'
             ]
-         ], [
-            'name' => __('Late'),
-            'data' => array_values(\Stat::constructEntryValues('Ticket', "inter_solved_late", $begin, $end)),
+         ],
+         'inter_solved_late' => [
+            'name'   => __('Late'),
             'search' => [
                'criteria' => [
                   [
@@ -609,13 +758,13 @@ class Provider extends \CommonGLPI {
                      'field'      => 82, // time_to_resolve exceed solve date
                      'searchtype' => 'equals',
                      'value'      => 1
-                  ]
+                  ],self::getSearchFiltersCriteria($t_table, $params['apply_filters']),
                ],
                'reset' => 'reset'
             ]
-         ], [
-            'name' => __('Closed'),
-            'data' => array_values(\Stat::constructEntryValues('Ticket', "inter_closed", $begin, $end)),
+         ],
+         'inter_closed' => [
+            'name'   => __('Closed'),
             'search' => [
                'criteria' => [
                   [
@@ -628,18 +777,38 @@ class Provider extends \CommonGLPI {
                      'field'      => 16, // close date
                      'searchtype' => 'lessthan',
                      'value'      => null
-                  ]
+                  ],self::getSearchFiltersCriteria($t_table, $params['apply_filters']),
                ],
                'reset' => 'reset'
             ]
          ],
       ];
 
-      foreach ($series as &$serie) {
-         $numbers = $serie['data'];
-         $serie['data'] = [];
+      $filters = array_merge_recursive(
+         Ticket::getCriteriaFromProfile(),
+         self::getFiltersCriteria($t_table, $params['apply_filters'])
+      );
 
-         foreach ($numbers as $index => $number) {
+      $i = 0;
+      $monthsyears = [];
+      foreach ($series as $stat_type => &$serie) {
+         $values = Stat::constructEntryValues(
+            'Ticket',
+            $stat_type,
+            $begin,
+            $end,
+            "",
+            "",
+            "",
+            $filters
+         );
+
+         if ($i === 0) {
+            $monthsyears = array_keys($values);
+         }
+         $values = array_values($values);
+
+         foreach ($values as $index => $number) {
             $current_monthyear = $monthsyears[$index];
             list($start_day, $end_day) = self::formatMonthyearDates($current_monthyear);
             $serie['search']['criteria'][0]['value'] = $start_day;
@@ -647,17 +816,17 @@ class Provider extends \CommonGLPI {
 
             $serie['data'][$index] = [
                'value' => $number,
-               'url'   => \Ticket::getSearchURL()."?".\Toolbox::append_params($serie['search']),
+               'url'   => Ticket::getSearchURL()."?".Toolbox::append_params($serie['search']),
             ];
          }
 
-         unset($serie['search']);
+         $i++;
       }
 
       return [
          'data'  => [
             'labels' => $monthsyears,
-            'series' => $series,
+            'series' => array_values($series),
          ],
          'label' => $params['label'],
          'icon'  => $params['icon'],
@@ -671,53 +840,73 @@ class Provider extends \CommonGLPI {
     * @param array $params default values for
     * - 'title' of the card
     * - 'icon' of the card
+    * - 'apply_filters' values from dashboard filters
     *
     * @return array
     */
    public static function getTicketsStatus(array $params = []): array {
-      $DB = \DBConnection::getReadConnection();
+      $DB = DBConnection::getReadConnection();
 
       $default_params = [
-         'label' => "",
-         'icon'  => \Ticket::getIcon(),
+         'label'          => "",
+         'icon'           => Ticket::getIcon(),
+         'apply_filters'  => [],
       ];
       $params = array_merge($default_params, $params);
 
-      $statuses = \ticket::getAllStatusArray();
+      $statuses = Ticket::getAllStatusArray();
+      $t_table  = Ticket::getTable();
 
-      $t_table = \Ticket::getTable();
-      $iterator = $DB->request([
-         'DISTINCT' => true,
+      $sub_query = array_merge_recursive(
+         [
+            'DISTINCT' => true,
+            'SELECT'   => ["$t_table.*"],
+            'FROM'     => $t_table,
+            'WHERE'    => [
+               "$t_table.is_deleted" => 0,
+            ] + getEntitiesRestrictCriteria($t_table),
+         ],
+         // limit count for profiles with limited rights
+         Ticket::getCriteriaFromProfile(),
+         self::getFiltersCriteria($t_table, $params['apply_filters'])
+      );
+
+      $criteria = [
          'SELECT'   => [
-            new \QueryExpression(
-               "FROM_UNIXTIME(UNIX_TIMESTAMP(".$DB->quoteName("$t_table.date")."),'%Y-%m') AS period"
+            new QueryExpression(
+               "FROM_UNIXTIME(UNIX_TIMESTAMP(".$DB->quoteName("{$t_table}_distinct.date")."),'%Y-%m') AS period"
             ),
-            new \QueryExpression(
-               "SUM(IF($t_table.status = ".\Ticket::INCOMING.", 1, 0)) as ".$DB->quoteValue(_x('status', 'New'))
+            new QueryExpression(
+               "SUM(IF({$t_table}_distinct.status = ".Ticket::INCOMING.", 1, 0))
+                  as ".$DB->quoteValue(_x('status', 'New'))
             ),
-            new \QueryExpression(
-               "SUM(IF($t_table.status = ".\Ticket::ASSIGNED.", 1, 0)) as ".$DB->quoteValue(_x('status', 'Processing (assigned)'))
+            new QueryExpression(
+               "SUM(IF({$t_table}_distinct.status = ".Ticket::ASSIGNED.", 1, 0))
+                  as ".$DB->quoteValue(_x('status', 'Processing (assigned)'))
             ),
-            new \QueryExpression(
-               "SUM(IF($t_table.status = ".\Ticket::PLANNED.", 1, 0)) as ".$DB->quoteValue(_x('status', 'Processing (planned)'))
+            new QueryExpression(
+               "SUM(IF({$t_table}_distinct.status = ".Ticket::PLANNED.", 1, 0))
+                  as ".$DB->quoteValue(_x('status', 'Processing (planned)'))
             ),
-            new \QueryExpression(
-               "SUM(IF($t_table.status = ".\Ticket::WAITING.", 1, 0)) as ".$DB->quoteValue(__('Pending'))
+            new QueryExpression(
+               "SUM(IF({$t_table}_distinct.status = ".Ticket::WAITING.", 1, 0))
+                  as ".$DB->quoteValue(__('Pending'))
             ),
-            new \QueryExpression(
-               "SUM(IF($t_table.status = ".\Ticket::SOLVED.", 1, 0)) as ".$DB->quoteValue(_x('status', 'Solved'))
+            new QueryExpression(
+               "SUM(IF({$t_table}_distinct.status = ".Ticket::SOLVED.", 1, 0))
+                  as ".$DB->quoteValue(_x('status', 'Solved'))
             ),
-            new \QueryExpression(
-               "SUM(IF($t_table.status = ".\Ticket::CLOSED.", 1, 0)) as ".$DB->quoteValue(_x('status', 'Closed'))
+            new QueryExpression(
+               "SUM(IF({$t_table}_distinct.status = ".Ticket::CLOSED.", 1, 0))
+                  as ".$DB->quoteValue(_x('status', 'Closed'))
             ),
          ],
-         'FROM'     => $t_table,
-         'WHERE'    => [
-            "$t_table.is_deleted" => 0,
-         ] + getEntitiesRestrictCriteria($t_table),
+         'FROM' => new QuerySubQuery($sub_query, "{$t_table}_distinct"),
          'ORDER'   => 'period ASC',
          'GROUP'    => ['period']
-      ]);
+      ];
+
+      $iterator = $DB->request($criteria);
 
       $s_criteria = [
          'criteria' => [
@@ -737,6 +926,7 @@ class Provider extends \CommonGLPI {
                'searchtype' => 'lessthan',
                'value'      => null
             ],
+            self::getSearchFiltersCriteria($t_table, $params['apply_filters'])
          ],
          'reset' => 'reset'
       ];
@@ -762,7 +952,7 @@ class Provider extends \CommonGLPI {
             $data['series'][$i]['name'] = $label2;
             $data['series'][$i]['data'][] = [
                'value' => (int) $value,
-               'url'   => \Ticket::getSearchURL()."?".\Toolbox::append_params($s_criteria),
+               'url'   => Ticket::getSearchURL()."?".Toolbox::append_params($s_criteria),
             ];
             $i++;
          }
@@ -789,6 +979,7 @@ class Provider extends \CommonGLPI {
     * @param array $params default values for
     * - 'title' of the card
     * - 'icon' of the card
+    * - 'apply_filters' values from dashboard filters
     *
     * @return array
     */
@@ -796,16 +987,17 @@ class Provider extends \CommonGLPI {
       string $case = "",
       array $params = []
    ):array {
-      $DBread = \DBConnection::getReadConnection();
+      $DBread = DBConnection::getReadConnection();
       $default_params = [
-         'label' => "",
-         'icon'  => null,
+         'label'         => "",
+         'icon'          => null,
+         'apply_filters' => [],
       ];
       $params = array_merge($default_params, $params);
 
-      $t_table  = \Ticket::getTable();
-      $li_table = \Ticket_User::getTable();
-      $ug_table = \User::getTable();
+      $t_table  = Ticket::getTable();
+      $li_table = Ticket_User::getTable();
+      $ug_table = User::getTable();
       $n_fields = [
          "$ug_table.firstname as first",
          "$ug_table.realname as second",
@@ -818,73 +1010,79 @@ class Provider extends \CommonGLPI {
       $case_array = explode('_', $case);
       if ($case_array[0] == 'user') {
          $where["$ug_table.is_deleted"]  = 0;
-         $params['icon'] = $params['icon'] ?? \User::getIcon();
+         $params['icon'] = $params['icon'] ?? User::getIcon();
       } else if ($case_array[0] == 'group') {
-         $li_table = \Group_Ticket::getTable();
-         $ug_table = \Group::getTable();
+         $li_table = Group_Ticket::getTable();
+         $ug_table = Group::getTable();
          $n_fields = [
             "$ug_table.completename as first"
          ];
-         $params['icon'] = $params['icon'] ?? \Group::getIcon();
+         $params['icon'] = $params['icon'] ?? Group::getIcon();
       }
 
       $type = 0;
       switch ($case) {
          case "user_requester":
-            $type     = \CommonITILActor::REQUESTER;
+            $type     = CommonITILActor::REQUESTER;
             $soption  = 4;
             break;
          case "group_requester":
-            $type     = \CommonITILActor::REQUESTER;
+            $type     = CommonITILActor::REQUESTER;
             $soption  = 71;
             break;
          case "user_observer":
-            $type     = \CommonITILActor::OBSERVER;
+            $type     = CommonITILActor::OBSERVER;
             $soption  = 66;
             break;
          case "group_observer":
-            $type     = \CommonITILActor::OBSERVER;
+            $type     = CommonITILActor::OBSERVER;
             $soption  = 65;
             break;
          case "user_assign":
-            $type     = \CommonITILActor::ASSIGN;
-            $soption  = 4;
+            $type     = CommonITILActor::ASSIGN;
+            $soption  = 5;
             break;
          case "group_assign":
-            $type     = \CommonITILActor::OBSERVER;
+            $type     = CommonITILActor::ASSIGN;
             $soption  = 8;
             break;
       }
 
-      $iterator = $DBread->request([
-         'SELECT' => array_merge([
-            'COUNT' => "$t_table.id AS nb_tickets",
-            "$ug_table.id as actor_id",
-         ], $n_fields),
-         'FROM' => $t_table,
-         'INNER JOIN' => [
-            $li_table => [
-               'ON' => [
-                  $li_table => getForeignKeyFieldForItemType("Ticket"),
-                  $t_table  => 'id',
-                  [
-                     'AND' => [
-                        "$li_table.type" => $type
+      $criteria = array_merge_recursive(
+         [
+            'SELECT' => array_merge([
+               'COUNT' => "$t_table.id AS nb_tickets",
+               "$ug_table.id as actor_id",
+            ], $n_fields),
+            'FROM' => $t_table,
+            'INNER JOIN' => [
+               $li_table => [
+                  'ON' => [
+                     $li_table => getForeignKeyFieldForItemType("Ticket"),
+                     $t_table  => 'id',
+                     [
+                        'AND' => [
+                           "$li_table.type" => $type
+                        ]
                      ]
+                  ]
+               ],
+               $ug_table => [
+                  'ON' => [
+                     $li_table => getForeignKeyFieldForTable($ug_table),
+                     $ug_table  => 'id'
                   ]
                ]
             ],
-            $ug_table => [
-               'ON' => [
-                  $li_table => getForeignKeyFieldForTable($ug_table),
-                  $ug_table  => 'id'
-               ]
-            ]
+            'GROUPBY' => "$ug_table.id",
+            'ORDER'   => 'nb_tickets DESC',
+            'WHERE'   => $where + getEntitiesRestrictCriteria($t_table),
          ],
-         'GROUPBY' => "$ug_table.id",
-         'ORDER'   => 'nb_tickets DESC',
-         'WHERE'   => $where + getEntitiesRestrictCriteria($t_table),
-      ]);
+         Ticket::getCriteriaFromProfile(),
+         self::getFiltersCriteria($t_table, $params['apply_filters'])
+      );
+      $iterator = $DBread->request($criteria);
+
       $s_criteria = [
          'criteria' => [
             [
@@ -893,6 +1091,7 @@ class Provider extends \CommonGLPI {
                'searchtype' => 'equals',
                'value'      => null
             ],
+            self::getSearchFiltersCriteria($t_table, $params['apply_filters']),
          ],
          'reset' => 'reset'
       ];
@@ -902,7 +1101,7 @@ class Provider extends \CommonGLPI {
          $data[] = [
             'number' => $result['nb_tickets'],
             'label'  => $result['first']." ".($result['second'] ?? ""),
-            'url'    => \Ticket::getSearchURL()."?".\Toolbox::append_params($s_criteria),
+            'url'    => Ticket::getSearchURL()."?".Toolbox::append_params($s_criteria),
          ];
       }
       return [
@@ -913,30 +1112,46 @@ class Provider extends \CommonGLPI {
    }
 
 
+   /**
+    * get average stats (takeintoaccoutn, solve/close delay, waiting) of ticket by month
+    *
+    * @param array $params default values for
+    * - 'title' of the card
+    * - 'icon' of the card
+    * - 'apply_filters' values from dashboard filters
+    *
+    * @return array
+    */
    public static function averageTicketTimes(array $params = []) {
-      $DBread = \DBConnection::getReadConnection();
+      $DBread = DBConnection::getReadConnection();
       $default_params = [
-         'label' => "",
-         'icon'  => "fas fa-stopwatch",
+         'label'         => "",
+         'icon'          => "fas fa-stopwatch",
+         'apply_filters' => [],
       ];
       $params = array_merge($default_params, $params);
 
-      $t_table = \Ticket::getTable();
-      $iterator = $DBread->request([
-         'SELECT' => [
-            new \QueryExpression("DATE_FORMAT(".$DBread->quoteName("date").", '%Y-%m') AS period"),
-            new \QueryExpression("AVG(".$DBread->quoteName("takeintoaccount_delay_stat").") AS avg_takeintoaccount_delay_stat"),
-            new \QueryExpression("AVG(".$DBread->quoteName("waiting_duration").") AS avg_waiting_duration"),
-            new \QueryExpression("AVG(".$DBread->quoteName("solve_delay_stat").") AS avg_solve_delay_stat"),
-            new \QueryExpression("AVG(".$DBread->quoteName("close_delay_stat").") AS close_delay_stat"),
+      $t_table  = Ticket::getTable();
+      $criteria = array_merge_recursive(
+         [
+            'SELECT' => [
+               new QueryExpression("DATE_FORMAT(".$DBread->quoteName("date").", '%Y-%m') AS period"),
+               new QueryExpression("AVG(".$DBread->quoteName("takeintoaccount_delay_stat").") AS avg_takeintoaccount_delay_stat"),
+               new QueryExpression("AVG(".$DBread->quoteName("waiting_duration").") AS avg_waiting_duration"),
+               new QueryExpression("AVG(".$DBread->quoteName("solve_delay_stat").") AS avg_solve_delay_stat"),
+               new QueryExpression("AVG(".$DBread->quoteName("close_delay_stat").") AS close_delay_stat"),
+            ],
+            'FROM' => $t_table,
+            'WHERE' => [
+               'is_deleted' => 0,
+            ] + getEntitiesRestrictCriteria($t_table),
+            'ORDER' => 'period ASC',
+            'GROUP' => ['period']
          ],
-         'FROM' => $t_table,
-         'WHERE' => [
-            'is_deleted' => 0,
-         ] + getEntitiesRestrictCriteria($t_table),
-         'ORDER' => 'period ASC',
-         'GROUP' => ['period']
-      ]);
+         Ticket::getCriteriaFromProfile(),
+         self::getFiltersCriteria($t_table, $params['apply_filters'])
+      );
+      $iterator = $DBread->request($criteria);
 
       $data = [
          'labels' => [],
@@ -975,6 +1190,65 @@ class Provider extends \CommonGLPI {
    }
 
 
+   /**
+    * get multiple count of ticket by status and month
+    *
+    * @param array $params default values for
+    * - 'title' of the card
+    * - 'icon' of the card
+    * - 'apply_filters' values from dashboard filters
+    *
+    * @return array
+    */
+   public static function getTicketSummary(array $params = []) {
+      $default_params = [
+         'label'         => "",
+         'icon'          => "",
+         'apply_filters' => [],
+      ];
+      $params = array_merge($default_params, $params);
+
+      $incoming   = self::nbTicketsGeneric('incoming', $params);
+      $assigned   = self::nbTicketsGeneric('assigned', $params);
+      $waiting    = self::nbTicketsGeneric('waiting', $params);
+      $tovalidate = self::nbTicketsGeneric('waiting_validation', $params);
+      $closed     = self::nbTicketsGeneric('closed', $params);
+
+      return [
+         'data'  => [
+            [
+               'number' => $incoming['number'],
+               'label'  => __("New"),
+               'url'    => $incoming['url'],
+               'color'  => '#3bc519',
+            ], [
+               'number' => $assigned['number'],
+               'label'  => __("Assigned"),
+               'url'    => $assigned['url'],
+               'color'  => '#f1cd29',
+            ], [
+               'number' => $waiting['number'],
+               'label'  => __("Pending"),
+               'url'    => $waiting['url'],
+               'color'  => '#f1a129',
+            ], [
+               'number' => $tovalidate['number'],
+               'label'  => __("To validate"),
+               'url'    => $tovalidate['url'],
+               'color'  => '#266ae9',
+            ], [
+               'number' => $closed['number'],
+               'label'  => __("Closed"),
+               'url'    => $closed['url'],
+               'color'  => '#555555',
+            ]
+         ],
+         'label' => $params['label'],
+         'icon'  => $params['icon'],
+      ];
+   }
+
+
    public static function formatMonthyearDates(string $monthyear): array {
       $rawdate = explode('-', $monthyear);
       $year    = $rawdate[0];
@@ -985,6 +1259,326 @@ class Provider extends \CommonGLPI {
       $end_day   = date("Y-m-d H:i:s", strtotime("first day of next month", $monthtime));
 
       return [$start_day, $end_day];
+   }
+
+   private static function getSearchOptionID(string $table, string $name, string $tableToSearch): int {
+      $data = Search::getOptions(getItemTypeForTable($table), true);
+      $sort = [];
+      foreach ($data as $ref => $opt) {
+         if (isset($opt['field'])) {
+            $sort[$ref] = $opt['linkfield']."-".$opt['table'];
+         }
+      }
+      return array_search($name."-".$tableToSearch, $sort);
+   }
+
+   final public static function getSearchFiltersCriteria(string $table = "", array $apply_filters = []) {
+      $DB = DBConnection::getReadConnection();
+      $s_criteria = [];
+
+      if ($DB->fieldExists($table, 'date')
+         && isset($apply_filters['dates'])
+         && count($apply_filters['dates']) == 2) {
+         $s_criteria['criteria'][] = self::getDatesSearchCriteria(self::getSearchOptionID($table, "date", $table), $apply_filters['dates'], 'begin');
+         $s_criteria['criteria'][] = self::getDatesSearchCriteria(self::getSearchOptionID($table, "date", $table), $apply_filters['dates'], 'end');
+      }
+
+      //exclude itilobject already processed with 'date'
+      if (!in_array($table, [
+         Ticket::getTable(),
+         Change::getTable(),
+         Problem::getTable(),
+      ]) && $DB->fieldExists($table, 'date_creation')
+      && isset($apply_filters['dates'])
+      && count($apply_filters['dates']) == 2) {
+         $s_criteria['criteria'][] = self::getDatesSearchCriteria(self::getSearchOptionID($table, "date_creation", $table), $apply_filters['dates'], 'begin');
+         $s_criteria['criteria'][] = self::getDatesSearchCriteria(self::getSearchOptionID($table, "date_creation", $table), $apply_filters['dates'], 'end');
+      }
+
+      if ($DB->fieldExists($table, 'date_mod')
+         && isset($apply_filters['dates_mod'])
+         && count($apply_filters['dates_mod']) == 2) {
+         $s_criteria['criteria'][] = self::getDatesSearchCriteria(self::getSearchOptionID($table, "date_mod", $table), $apply_filters['dates_mod'], 'begin');
+         $s_criteria['criteria'][] = self::getDatesSearchCriteria(self::getSearchOptionID($table, "date_mod", $table), $apply_filters['dates_mod'], 'end');
+      }
+
+      if ($DB->fieldExists($table, 'itilcategories_id')
+         && isset($apply_filters['itilcategory'])
+         && (int) $apply_filters['itilcategory'] > 0) {
+         $s_criteria['criteria'][] = [
+            'link'       => 'AND',
+            'field'      => self::getSearchOptionID($table, 'itilcategories_id', 'glpi_itilcategories'), // itilcategory
+            'searchtype' => 'equals',
+            'value'      => (int) $apply_filters['itilcategory']
+         ];
+      }
+
+      if ($DB->fieldExists($table, 'requesttypes_id')
+         && isset($apply_filters['requesttype'])
+         && (int) $apply_filters['requesttype'] > 0) {
+         $s_criteria['criteria'][] = [
+            'link'       => 'AND',
+            'field'      => self::getSearchOptionID($table, 'requesttypes_id', 'glpi_requesttypes'), // request type
+            'searchtype' => 'equals',
+            'value'      => (int) $apply_filters['requesttype']
+         ];
+      }
+
+      if ($DB->fieldExists($table, 'locations_id')
+         && isset($apply_filters['location'])
+         && (int) $apply_filters['location'] > 0) {
+         $s_criteria['criteria'][] = [
+            'link'       => 'AND',
+            'field'      => self::getSearchOptionID($table, 'locations_id', 'glpi_locations'), // location
+            'searchtype' => 'equals',
+            'value'      => (int) $apply_filters['location']
+         ];
+      }
+
+      if ($DB->fieldExists($table, 'manufacturers_id')
+         && isset($apply_filters['manufacturer'])
+         && (int) $apply_filters['manufacturer'] > 0) {
+         $s_criteria['criteria'][] = [
+            'link'       => 'AND',
+            'field'      => self::getSearchOptionID($table, 'manufacturers_id', 'glpi_manufacturers'), // manufacturer
+            'searchtype' => 'equals',
+            'value'      => (int) $apply_filters['manufacturer']
+         ];
+      }
+
+      if (isset($apply_filters['group_tech'])) {
+
+         $groups_id = null;
+         if ((int) $apply_filters['group_tech'] > 0) {
+            $groups_id =  (int) $apply_filters['group_tech'];
+         } else if ((int) $apply_filters['group_tech'] == -1) {
+            $groups_id =  'mygroups';
+         }
+
+         if ($groups_id != null) {
+            if ($DB->fieldExists($table, 'groups_id_tech')) {
+               $s_criteria['criteria'][] = [
+                  'link'       => 'AND',
+                  'field'      => self::getSearchOptionID($table, 'groups_id_tech', 'glpi_groups'), // group tech
+                  'searchtype' => 'equals',
+                  'value'      => $groups_id
+               ];
+            } else if (in_array($table, [
+               Ticket::getTable(),
+               Change::getTable(),
+               Problem::getTable(),
+            ])) {
+               $s_criteria['criteria'][] = [
+                  'link'       => 'AND',
+                  'field'      => 8, // group tech
+                  'searchtype' => 'equals',
+                  'value'      => $groups_id
+               ];
+            }
+         }
+      }
+
+      if (isset($apply_filters['user_tech'])
+          && (int) $apply_filters['user_tech'] > 0) {
+         if ($DB->fieldExists($table, 'users_id_tech')) {
+            $s_criteria['criteria'][] = [
+               'link'       => 'AND',
+               'field'      => self::getSearchOptionID($table, 'users_id_tech', 'glpi_users'),// tech
+               'searchtype' => 'equals',
+               'value'      =>  (int) $apply_filters['user_tech']
+            ];
+         } else if (in_array($table, [
+            Ticket::getTable(),
+            Change::getTable(),
+            Problem::getTable(),
+         ])) {
+            $s_criteria['criteria'][] = [
+               'link'       => 'AND',
+               'field'      => 5,// tech
+               'searchtype' => 'equals',
+               'value'      =>  (int) $apply_filters['user_tech']
+            ];
+         }
+      }
+
+      return $s_criteria;
+   }
+
+   private static function getFiltersCriteria(string $table = "", array $apply_filters = []) {
+      $DB = DBConnection::getReadConnection();
+
+      $where = [];
+      $join  = [];
+
+      if (($DB->fieldExists($table, 'date'))
+          && isset($apply_filters['dates'])
+          && count($apply_filters['dates']) == 2) {
+         $where += self::getDatesCriteria("$table.date", $apply_filters['dates']);
+      }
+
+      //exclude itilobject already processed with 'date'
+      if ((!in_array($table, [
+         Ticket::getTable(),
+         Change::getTable(),
+         Problem::getTable(),
+      ]) && $DB->fieldExists($table, 'date_creation'))
+          && isset($apply_filters['dates'])
+          && count($apply_filters['dates']) == 2) {
+         $where += self::getDatesCriteria("$table.date_creation", $apply_filters['dates']);
+      }
+
+      if ($DB->fieldExists($table, 'date_mod')
+          && isset($apply_filters['dates_mod'])
+          && count($apply_filters['dates_mod']) == 2) {
+         $where += self::getDatesCriteria("$table.date_mod", $apply_filters['dates_mod']);
+      }
+
+      if ($DB->fieldExists($table, 'itilcategories_id')
+          && isset($apply_filters['itilcategory'])
+          && (int) $apply_filters['itilcategory'] > 0) {
+         $where += [
+            "$table.itilcategories_id" => (int) $apply_filters['itilcategory']
+         ];
+      }
+
+      if ($DB->fieldExists($table, 'requesttypes_id')
+          && isset($apply_filters['requesttype'])
+          && (int) $apply_filters['requesttype'] > 0) {
+         $where += [
+            "$table.requesttypes_id" => (int) $apply_filters['requesttype']
+         ];
+      }
+
+      if ($DB->fieldExists($table, 'locations_id')
+          && isset($apply_filters['location'])
+          && (int) $apply_filters['location'] > 0) {
+         $where += [
+            "$table.locations_id" => (int) $apply_filters['location']
+         ];
+      }
+
+      if ($DB->fieldExists($table, 'manufacturers_id')
+          && isset($apply_filters['manufacturer'])
+          && (int) $apply_filters['manufacturer'] > 0) {
+         $where += [
+            "$table.manufacturers_id" => (int) $apply_filters['manufacturer']
+         ];
+      }
+
+      if (isset($apply_filters['group_tech'])) {
+
+         $groups_id = null;
+         if ((int) $apply_filters['group_tech'] > 0) {
+            $groups_id =  (int) $apply_filters['group_tech'];
+         } else if ((int) $apply_filters['group_tech'] == -1) {
+            $groups_id =  $_SESSION['glpigroups'];
+         }
+
+         if ($groups_id != null) {
+            if ($DB->fieldExists($table, 'groups_id_tech')) {
+               $where += [
+                  "$table.groups_id_tech" => $groups_id
+               ];
+            } else if (in_array($table, [
+               Ticket::getTable(),
+               Change::getTable(),
+               Problem::getTable(),
+            ])) {
+               $itemtype  = getItemTypeForTable($table);
+               $main_item = getItemForItemtype($itemtype);
+               $grouplink = $main_item->grouplinkclass;
+               $gl_table  = $grouplink::getTable();
+               $fk        = $main_item->getForeignKeyField();
+
+               $join += [
+                  "$gl_table as gl" => [
+                     'ON' => [
+                        'gl'   => $fk,
+                        $table => 'id',
+                     ]
+                  ]
+               ];
+               $where += [
+                  "gl.type"      => \CommonITILActor::ASSIGN,
+                  "gl.groups_id" => $groups_id
+               ];
+            }
+         }
+      }
+
+      if (isset($apply_filters['user_tech'])
+          && (int) $apply_filters['user_tech'] > 0) {
+
+         if ($DB->fieldExists($table, 'users_id_tech')) {
+            $where += [
+               "$table.users_id_tech" => (int) $apply_filters['user_tech']
+            ];
+         } else if (in_array($table, [
+            Ticket::getTable(),
+            Change::getTable(),
+            Problem::getTable(),
+         ])) {
+            $itemtype  = getItemTypeForTable($table);
+            $main_item = getItemForItemtype($itemtype);
+            $userlink  = $main_item->userlinkclass;
+            $gl_table  = $userlink::getTable();
+            $fk        = $main_item->getForeignKeyField();
+
+            $join += [
+               "$gl_table as gl" => [
+                  'ON' => [
+                     'gl'   => $fk,
+                     $table => 'id',
+                  ]
+               ]
+            ];
+            $where += [
+               "gl.type"     => \CommonITILActor::ASSIGN,
+               "gl.users_id" => (int) $apply_filters['user_tech']
+            ];
+         }
+      }
+
+      $criteria = [];
+      if (count($where)) {
+         $criteria['WHERE'] = $where;
+      }
+      if (count($join)) {
+         $criteria['LEFT JOIN'] = $join;
+      }
+
+      return $criteria;
+   }
+
+   private static function getDatesCriteria(string $field = "", array $dates = []): array {
+      $begin = strtotime($dates[0]);
+      $end   = strtotime($dates[1]);
+
+      return [
+         [$field => ['>=', date('Y-m-d', $begin)]],
+         [$field => ['<=', date('Y-m-d', $end)]],
+      ];
+   }
+
+   private static function getDatesSearchCriteria(int $searchoption_id, array $dates = [], $when = 'begin'): array {
+
+      if ($when == "begin") {
+         $begin = strtotime($dates[0]);
+         return [
+            'link'       => 'AND',
+            'field'      => $searchoption_id, // creation date
+            'searchtype' => 'morethan',
+            'value'      => date('Y-m-d 00:00:00', $begin)
+         ];
+      } else {
+         $end   = strtotime($dates[1]);
+         return [
+            'link'       => 'AND',
+            'field'      => $searchoption_id, // creation date
+            'searchtype' => 'lessthan',
+            'value'      => date('Y-m-d 00:00:00', $end)
+         ];
+      }
    }
 
 }

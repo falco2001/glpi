@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -45,9 +45,6 @@ class Item_DeviceProcessor extends Item_Devices {
    static protected $notable = false;
 
 
-   /**
-    * @since 0.85
-    **/
    static function getSpecificities($specif = '') {
 
       return ['frequency' => ['long name'  => sprintf(__('%1$s (%2$s)'), __('Frequency'),

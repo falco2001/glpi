@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -363,12 +363,12 @@ class Computer_Item extends CommonDBRelation{
             $header_bottom .=  "</th>";
          }
 
-         $header_end .= "<th>".__('Type')."</th>";
+         $header_end .= "<th>"._n('Type', 'Types', 1)."</th>";
          $header_end .= "<th>".__('Name')."</th>";
          if (Plugin::haveImport()) {
             $header_end .= "<th>".__('Automatic inventory')."</th>";
          }
-         $header_end .= "<th>".__('Entity')."</th>";
+         $header_end .= "<th>".Entity::getTypeName(1)."</th>";
          $header_end .= "<th>".__('Serial number')."</th>";
          $header_end .= "<th>".__('Inventory number')."</th>";
          $header_end .= "</tr>";
@@ -395,7 +395,8 @@ class Computer_Item extends CommonDBRelation{
                   ((isset($data['is_deleted']) && $data['is_deleted'])?"class='tab_bg_2_2'":"").
                  ">".$name."</td>";
             if (Plugin::haveImport()) {
-               echo "<td>".Dropdown::getYesNo($data['is_dynamic'])."</td>";
+               $dynamic_field = static::getTable() . '_is_dynamic';
+               echo "<td>".Dropdown::getYesNo($data[$dynamic_field])."</td>";
             }
             echo "<td>".Dropdown::getDropdownName("glpi_entities",
                                                                $data['entities_id']);
@@ -522,7 +523,7 @@ class Computer_Item extends CommonDBRelation{
          if (Plugin::haveImport()) {
             $header_end .= "<th>".__('Automatic inventory')."</th>";
          }
-         $header_end .= "<th>".__('Entity')."</th>";
+         $header_end .= "<th>".Entity::getTypeName(1)."</th>";
          $header_end .= "<th>".__('Serial number')."</th>";
          $header_end .= "<th>".__('Inventory number')."</th>";
          $header_end .= "</tr>";
@@ -675,11 +676,16 @@ class Computer_Item extends CommonDBRelation{
       $rand     = mt_rand();
 
       $field_id = Html::cleanId("dropdown_".$myname.$rand);
-      $param    = ['entity_restrict' => $entity_restrict,
-                        'fromtype'        => $fromtype,
-                        'itemtype'        => $itemtype,
-                        'onlyglobal'      => $onlyglobal,
-                        'used'            => $used];
+      $param    = [
+         'entity_restrict' => $entity_restrict,
+         'fromtype'        => $fromtype,
+         'itemtype'        => $itemtype,
+         'onlyglobal'      => $onlyglobal,
+         'used'            => $used,
+         '_idor_token'     => Session::getNewIDORToken($itemtype, [
+            'entity_restrict' => $entity_restrict,
+         ]),
+      ];
 
       echo Html::jsAjaxDropdown($myname, $field_id,
                                 $CFG_GLPI['root_doc']."/ajax/getDropdownConnect.php",
@@ -842,5 +848,20 @@ class Computer_Item extends CommonDBRelation{
       $params = parent::getListForItemParams($item, $noent);
       $params['WHERE'][self::getTable() . '.is_deleted'] = 0;
       return $params;
+   }
+
+   /**
+    * Get SELECT param for getTypeItemsQueryParams
+    *
+    * @param CommonDBTM $item
+    *
+    * @return array
+    */
+   public static function getTypeItemsQueryParams_Select(CommonDBTM $item): array {
+      $table = static::getTable();
+      $select = parent::getTypeItemsQueryParams_Select($item);
+      $select[] = "$table.is_dynamic AS {$table}_is_dynamic";
+
+      return $select;
    }
 }

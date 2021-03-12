@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -913,9 +913,10 @@ class RSSFeed extends CommonDBVisible implements ExtraVisibilityCriteria {
 
       $table = self::getTable();
       $criteria = [
-         'SELECT' => "$table.*",
-         'FROM'   => $table,
-         'ORDER'  => "$table.name"
+         'SELECT'   => "$table.*",
+         'DISTINCT' => true,
+         'FROM'     => $table,
+         'ORDER'    => "$table.name"
       ];
 
       if ($personal) {

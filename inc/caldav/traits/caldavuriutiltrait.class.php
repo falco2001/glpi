@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -245,7 +245,7 @@ trait CalDAVUriUtilTrait {
    /**
     * Returns calendar item for given path.
     *
-    * @param string  $uid
+    * @param string  $path
     *
     * @return CalDAVCompatibleItemInterface|null
     */

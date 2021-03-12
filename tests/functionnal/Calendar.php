@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -80,12 +80,12 @@ class Calendar extends DbTestCase {
             'start'  => '2019-01-01 07:00:00',
             'end'    => '2019-01-01 09:00:00',
             'value'  => HOUR_TIMESTAMP * 2,
-            'day'    => true
+            'days'   => true
          ], [
             'start'  => '2019-01-01 00:00:00',
             'end'    => '2019-01-08 00:00:00',
             'value'  => WEEK_TIMESTAMP,
-            'day'    => true
+            'days'   => true
          ]
       ];
    }
@@ -161,20 +161,19 @@ class Calendar extends DbTestCase {
       $this->boolean($calendar->isAWorkingHour(strtotime($date)))->isIdenticalTo($expected);
    }
 
-   public function testIsHoliday() {
-      $calendar = new \Calendar();
-
+   private function addXmas(\Calendar $calendar) {
       $calendar_holiday = new \Calendar_Holiday();
       $this->integer(
          (int)$calendar_holiday->add([
-            'calendars_id' => getItemByTypeName('Calendar', 'Default', true),
+            'calendars_id' => $calendar->fields['id'],
             'holidays_id'  => getItemByTypeName('Holiday', 'X-Mas', true)
          ])
       )->isGreaterThan(0);
 
-      // get Default calendar
-      $this->boolean($calendar->getFromDB(getItemByTypeName('Calendar', 'Default', true)))->isTrue();
+      $this->checkXmas($calendar);
+   }
 
+   private function checkXmas(\Calendar $calendar) {
       $this->boolean(
          $calendar->isHoliday('2018-01-01')
       )->isFalse();
@@ -182,6 +181,13 @@ class Calendar extends DbTestCase {
       $this->boolean(
          $calendar->isHoliday('2019-01-01')
       )->isTrue();
+   }
+
+   public function testIsHoliday() {
+      $calendar = new \Calendar();
+      // get Default calendar
+      $default_id = getItemByTypeName('Calendar', 'Default', true);
+      $this->boolean($calendar->getFromDB($default_id))->isTrue();
 
       $dates= [
          '2019-05-01'   => true,
@@ -195,7 +201,11 @@ class Calendar extends DbTestCase {
          $this->boolean($calendar->isHoliday($date))->isFalse;
       }
 
-      //Add holidays
+      //Clone calendar and add holidays
+      $clone_id = $calendar->clone();
+      $this->integer($clone_id)->isGreaterThan($default_id);
+      $this->boolean($calendar->getFromDB($clone_id))->isTrue();
+
       $calendar_holiday = new \Calendar_Holiday();
       $holiday = new \Holiday();
       $hid = (int)$holiday->add([
@@ -233,5 +243,33 @@ class Calendar extends DbTestCase {
       foreach ($dates as $date => $expected) {
          $this->boolean($calendar->isHoliday($date))->isIdenticalTo($expected);
       }
+   }
+
+   public function testClone() {
+      $calendar = new \Calendar();
+      $default_id = getItemByTypeName('Calendar', 'Default', true);
+      // get Default calendar
+      $this->boolean($calendar->getFromDB($default_id))->isTrue();
+      $this->addXmas($calendar);
+
+      $id = $calendar->clone();
+      $this->integer($id)->isGreaterThan($default_id);
+      $this->boolean($calendar->getFromDB($id))->isTrue();
+      //should have been duplicated too.
+      $this->checkXmas($calendar);
+
+      //change name, and clone again
+      $this->boolean($calendar->update(['id' => $id, 'name' => "Je s\'apelle Groot"]))->isTrue();
+
+      $calendar = new \Calendar();
+      $this->boolean($calendar->getFromDB($id))->isTrue();
+
+      $this->boolean($calendar->duplicate())->isTrue();
+      $other_id = $calendar->fields['id'];
+      $this->integer($other_id)->isGreaterThan($id);
+      $this->boolean($calendar->getFromDB($other_id))->isTrue();
+      //should have been duplicated too.
+      $this->checkXmas($calendar);
+
    }
 }

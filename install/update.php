@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -38,6 +38,8 @@ include_once (GLPI_ROOT . "/inc/based_config.php");
 include_once (GLPI_ROOT . "/inc/db.function.php");
 include_once (GLPI_CONFIG_DIR . "/config_db.php");
 
+global $DB, $GLPI, $GLPI_CACHE;
+
 $GLPI = new GLPI();
 $GLPI->initLogger();
 $GLPI->initErrorHandler();
@@ -52,6 +54,8 @@ Config::detectRootDoc();
 
 $DB = new DB();
 $DB->disableTableCaching(); //prevents issues on fieldExists upgrading from old versions
+
+Config::loadLegacyConfiguration();
 
 $update = new Update($DB);
 $update->initSession();
@@ -506,6 +510,32 @@ function updateTreeDropdown() {
    }
 }
 
+/**
+ * Display security key check form.
+ *
+ * @return void
+ */
+function showSecurityKeyCheckForm() {
+   global $CFG_GLPI, $update;
+
+   echo '<form action="update.php" method="post">';
+   echo '<input type="hidden" name="continuer" value="1" />';
+   echo '<input type="hidden" name="missing_key_warning_shown" value="1" />';
+   echo '<div class="center">';
+   echo '<h3>' . __('Missing security key file') . '</h3>';
+   echo '<p>';
+   echo '<img src="' . $CFG_GLPI['root_doc'] . '/pics/ko_min.png" />';
+   echo sprintf(
+      __('The key file "%s" used to encrypt/decrypt sensitive data is missing. You should retrieve it from your previous installation or encrypted data will be unreadable.'),
+      $update->getExpectedSecurityKeyFilePath()
+   );
+   echo '</p>';
+   echo '<input type="submit" name="ignore" class="submit" value="' . __('Ignore warning') . '" />';
+   echo '&nbsp;&nbsp;';
+   echo '<input type="submit" name="retry" class="submit" value="' . __('Try again') . '" />';
+   echo '</form>';
+}
+
 //Debut du script
 $HEADER_LOADED = true;
 
@@ -570,7 +600,12 @@ if (empty($_POST["continuer"]) && empty($_POST["from_update"])) {
       if ($result > 0) {
          die(1);
       }
-      if (!isset($_POST["update_location"])) {
+      if ($update->isExpectedSecurityKeyFileMissing()
+          && (!isset($_POST['missing_key_warning_shown']) || !isset($_POST['ignore']))) {
+         // Display missing security key file form if key file is missing
+         // unless it has already been displayed and user clicks on "ignore" button.
+         showSecurityKeyCheckForm();
+      } else if (!isset($_POST["update_location"])) {
          $current_version = "0.31";
          $config_table    = "glpi_config";
 

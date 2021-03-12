@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -201,7 +201,7 @@ class RuleCriteria extends CommonDBChild {
                 && !empty($values['rules_id'])
                 && $generic_rule->getFromDB($values['rules_id'])) {
                if ($rule = getItemForItemtype($generic_rule->fields["sub_type"])) {
-                  return $rule->getCriteria($values[$field]);
+                  return $rule->getCriteriaName($values[$field]);
                }
             }
             break;
@@ -214,7 +214,7 @@ class RuleCriteria extends CommonDBChild {
                if (isset($values['criteria']) && !empty($values['criteria'])) {
                   $criterion = $values['criteria'];
                }
-               return $rule->getConditionByID($values[$field], $generic_rule->fields["sub_type"], $criterion);
+               return self::getConditionByID($values[$field], $generic_rule->fields["sub_type"], $criterion);
             }
             break;
 
@@ -450,7 +450,9 @@ class RuleCriteria extends CommonDBChild {
                // And add to $regex_result array
                $res = [];
                foreach ($results as $data) {
-                  $res[] = $data[0];
+                  foreach ($data as $val) {
+                     $res[] = $val;
+                  }
                }
                $regex_result[]               = $res;
                $criterias_results[$criteria] = $pattern;

@@ -1,7 +1,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -2458,7 +2458,7 @@ var GLPIImpact = {
          html += "<ul>";
 
          elements.forEach(function(element) {
-            var link = "./" + url + ".form.php?id=" + element.id;
+            var link = CFG_GLPI.root_doc + "/front/" + url + ".form.php?id=" + element.id;
             html += '<li><a target="_blank" href="' + link + '">' + element.name
                + '</a></li>';
          });

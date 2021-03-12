@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -190,7 +190,7 @@ class APIRest extends API {
 
       } else if ($resource === "search") {
          // Search on itemtype
-         self::checkSessionToken();
+         $this->checkSessionToken();
 
          $itemtype = $this->getItemtype(1, true, true);
          //clean stdObjects in parameter
@@ -555,7 +555,7 @@ class APIRest extends API {
       }
 
       http_response_code($httpcode);
-      self::header($this->debug);
+      $this->header($this->debug);
 
       if ($response !== null) {
          $json = json_encode($response, JSON_UNESCAPED_UNICODE

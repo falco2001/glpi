@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -68,7 +68,7 @@ class WifiNetwork extends CommonDropdown {
                    'master'    => __('Master'),
                    'repeater'  => __('Repeater'),
                    'secondary' => __('Secondary'),
-                   'monitor'   => __('Monitor'),
+                   'monitor'   => Monitor::getTypeName(1),
                    'auto'      => __('Automatic')];
    }
 

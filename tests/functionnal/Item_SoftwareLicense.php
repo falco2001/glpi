@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -102,7 +102,7 @@ class Item_SoftwareLicense extends DbTestCase {
       $this->boolean(
          $lic->update([
             'id'                       => $lic->fields['id'],
-            'softwareversions_id_use'  => 'NULL'
+            'softwareversions_id_use'  => 0
          ])
       )->isTrue();
    }

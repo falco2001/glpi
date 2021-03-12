@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -151,7 +151,7 @@ class Domain extends DbTestCase {
       //transer to another entity
       $transfer = new \Transfer();
 
-      $controller = new \atoum\mock\controller();
+      $controller = new \atoum\atoum\mock\controller();
       $controller->__construct = function() {
          // void
       };

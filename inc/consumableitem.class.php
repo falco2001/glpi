@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -134,7 +134,7 @@ class ConsumableItem extends CommonDBTM {
       echo "<td>";
       Html::autocompletionTextField($this, "name");
       echo "</td>";
-      echo "<td>".__('Type')."</td>";
+      echo "<td>"._n('Type', 'Types', 1)."</td>";
       echo "<td>";
       ConsumableItemType::dropdown(['value' => $this->fields["consumableitemtypes_id"]]);
       echo "</td></tr>";
@@ -144,7 +144,7 @@ class ConsumableItem extends CommonDBTM {
       echo "<td>";
       Html::autocompletionTextField($this, "ref");
       echo "</td>";
-      echo "<td>".__('Manufacturer')."</td>";
+      echo "<td>".Manufacturer::getTypeName(1)."</td>";
       echo "<td>";
       Manufacturer::dropdown(['value' => $this->fields["manufacturers_id"]]);
       echo "</td></tr>\n";
@@ -214,22 +214,7 @@ class ConsumableItem extends CommonDBTM {
 
 
    function rawSearchOptions() {
-      $tab = [];
-
-      $tab[] = [
-         'id'                 => 'common',
-         'name'               => __('Characteristics')
-      ];
-
-      $tab[] = [
-         'id'                 => '1',
-         'table'              => $this->getTable(),
-         'field'              => 'name',
-         'name'               => __('Name'),
-         'datatype'           => 'itemlink',
-         'massiveaction'      => false,
-         'autocomplete'       => true,
-      ];
+      $tab = parent::rawSearchOptions();
 
       $tab[] = [
          'id'                 => '2',
@@ -262,7 +247,7 @@ class ConsumableItem extends CommonDBTM {
          'id'                 => '4',
          'table'              => 'glpi_consumableitemtypes',
          'field'              => 'name',
-         'name'               => __('Type'),
+         'name'               => _n('Type', 'Types', 1),
          'datatype'           => 'dropdown'
       ];
 
@@ -270,7 +255,7 @@ class ConsumableItem extends CommonDBTM {
          'id'                 => '23',
          'table'              => 'glpi_manufacturers',
          'field'              => 'name',
-         'name'               => __('Manufacturer'),
+         'name'               => Manufacturer::getTypeName(1),
          'datatype'           => 'dropdown'
       ];
 
@@ -362,7 +347,7 @@ class ConsumableItem extends CommonDBTM {
          'id'                 => '80',
          'table'              => 'glpi_entities',
          'field'              => 'completename',
-         'name'               => __('Entity'),
+         'name'               => Entity::getTypeName(1),
          'massiveaction'      => false,
          'datatype'           => 'dropdown'
       ];

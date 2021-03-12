@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -50,7 +50,7 @@ class Netpoint extends CommonDropdown {
    function getAdditionalFields() {
 
       return [['name'  => 'locations_id',
-                         'label' => __('Location'),
+                         'label' => Location::getTypeName(1),
                          'type'  => 'dropdownValue',
                          'list'  => true]];
    }
@@ -150,8 +150,11 @@ class Netpoint extends CommonDropdown {
                                           $item->getFormURL());
 
          }
-         $paramscomment = ['value' => '__VALUE__',
-                                'table' => "glpi_netpoints"];
+         $paramscomment = [
+            'value'       => '__VALUE__',
+            'itemtype'    => Netpoint::getType(),
+            '_idor_token' => Session::getNewIDORToken("Netpoint")
+         ];
          echo Ajax::updateItemOnSelectEvent($field_id, $comment_id,
                                             $CFG_GLPI["root_doc"]."/ajax/comments.php",
                                             $paramscomment, false);
@@ -399,7 +402,7 @@ class Netpoint extends CommonDropdown {
          return;
       }
 
-      $base->addHeader($column_name, __('Network outlet'), $super, $father);
+      $base->addHeader($column_name, _n('Network outlet', 'Network outlets', 1), $super, $father);
 
    }
 

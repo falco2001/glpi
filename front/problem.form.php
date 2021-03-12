@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -94,6 +94,22 @@ if (isset($_POST["add"])) {
    } else {
       Html::back();
    }
+
+} else if (isset($_POST['addme_observer'])) {
+   $problem->check($_POST['problems_id'], READ);
+   $input = array_merge(Toolbox::addslashes_deep($problem->fields), [
+      'id' => $_POST['problems_id'],
+      '_itil_observer' => [
+         '_type' => "user",
+         'users_id' => Session::getLoginUserID(),
+         'use_notification' => 1,
+      ]
+   ]);
+   $problem->update($input);
+   Event::log($_POST['problems_id'], "problem", 4, "maintain",
+              //TRANS: %s is the user login
+              sprintf(__('%s adds an actor'), $_SESSION["glpiname"]));
+   Html::redirect($problem->getFormURLWithID($_POST['problems_id']));
 
 } else if (isset($_POST['addme_assign'])) {
    $problem_user = new Problem_User();

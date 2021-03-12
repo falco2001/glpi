@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -329,7 +329,7 @@ class CommonDBTM extends CommonGLPI {
     *
     * @since 9.2
     *
-    * @param Array $crit search criteria
+    * @param array $crit search criteria
     *
     * @return boolean|array
     */
@@ -857,7 +857,7 @@ class CommonDBTM extends CommonGLPI {
 
 
    /**
-    * Clean the date in the relation tables for the deleted item
+    * Clean the data in the relation tables for the deleted item
     * Clear N/N Relation
     *
     * @return void
@@ -1067,8 +1067,19 @@ class CommonDBTM extends CommonGLPI {
             $id_to_clone = $input['id'];
          }
          if (isset($id_to_clone) && $this->getFromDB($id_to_clone)) {
-            return $this->clone($input, $history);
+            if ($clone_id = $this->clone($input, $history)) {
+               $this->getFromDB($clone_id); // Load created items fields
+            }
+            return $clone_id;
          }
+      }
+
+      if (isset($input['name'])) {
+         $input['name'] = strip_tags(Toolbox::unclean_cross_side_scripting_deep($input['name']));
+      }
+
+      if (isset($input['comments'])) {
+         $input['comments'] = strip_tags(Toolbox::unclean_cross_side_scripting_deep($input['comments']));
       }
 
       // Store input in the object to be available in all sub-method / hook
@@ -1206,7 +1217,7 @@ class CommonDBTM extends CommonGLPI {
          return false;
       }
       $new_item = new static();
-      $input = $this->fields;
+      $input = Toolbox::addslashes_deep($this->fields);
       foreach ($override_input as $key => $value) {
          $input[$key] = $value;
       }
@@ -1370,6 +1381,9 @@ class CommonDBTM extends CommonGLPI {
     * @return array the modified $input array
    **/
    function prepareInputForClone($input) {
+      unset($input['id']);
+      unset($input['date_mod']);
+      unset($input['date_creation']);
       return $input;
    }
 
@@ -1412,8 +1426,20 @@ class CommonDBTM extends CommonGLPI {
          return false;
       }
 
+      if (!array_key_exists(static::getIndexName(), $input)) {
+         return false;
+      }
+
       if (!$this->getFromDB($input[static::getIndexName()])) {
          return false;
+      }
+
+      if (isset($input['name'])) {
+         $input['name'] = strip_tags(Toolbox::unclean_cross_side_scripting_deep($input['name']));
+      }
+
+      if (isset($input['comments'])) {
+         $input['comments'] = strip_tags(Toolbox::unclean_cross_side_scripting_deep($input['comments']));
       }
 
       // Store input in the object to be available in all sub-method / hook
@@ -2636,15 +2662,13 @@ class CommonDBTM extends CommonGLPI {
             if ($this->isEntityAssign()) {
                if (isset($params['entities_id'])) {
                   $entity = $this->fields['entities_id'] = $params['entities_id'];
-
+               } else if (isset($this->fields['entities_id'])) {
+                  //It's an existing object to be displayed
+                  $entity = $this->fields['entities_id'];
                } else if ($this->isNewID($ID)
                           || ($params['withtemplate'] == 2)) {
                   //It's a new object to be added
                   $entity = $_SESSION['glpiactive_entity'];
-
-               } else {
-                  //It's an existing object to be displayed
-                  $entity = $this->fields['entities_id'];
                }
 
                echo "<input type='hidden' name='entities_id' value='$entity'>";
@@ -2818,7 +2842,7 @@ class CommonDBTM extends CommonGLPI {
          }
 
          if ($this->isPrivate()
-             && ($this->fields['users_id'] === Session::getLoginUserID())) {
+             && ($this->fields['users_id'] == Session::getLoginUserID())) {
             return true;
          }
          return (static::canCreate() && $this->canCreateItem());
@@ -3196,9 +3220,9 @@ class CommonDBTM extends CommonGLPI {
    function isDynamic() {
 
       if ($this->maybeDynamic()) {
-         return $this->fields['is_dynamic'];
+         return (bool)$this->fields['is_dynamic'];
       }
-      return 0;
+      return false;
    }
 
 
@@ -3225,7 +3249,7 @@ class CommonDBTM extends CommonGLPI {
    function isPrivate() {
 
       if ($this->maybePrivate()) {
-         return $this->fields["is_private"];
+         return (bool)$this->fields["is_private"];
       }
       return false;
    }
@@ -3342,7 +3366,7 @@ class CommonDBTM extends CommonGLPI {
       if ($this->isField('locations_id') && $this->getType()!='Location') {
          $tmp = Dropdown::getDropdownName("glpi_locations", $this->getField('locations_id'));
          if ((strlen($tmp) != 0) && ($tmp != '&nbsp;')) {
-            $toadd[] = ['name'  => __('Location'),
+            $toadd[] = ['name'  => Location::getTypeName(1),
                              'value' => $tmp];
          }
       }
@@ -3350,7 +3374,7 @@ class CommonDBTM extends CommonGLPI {
       if ($this->isField('users_id')) {
          $tmp = getUserName($this->getField('users_id'));
          if ((strlen($tmp) != 0) && ($tmp != '&nbsp;')) {
-            $toadd[] = ['name'  => __('User'),
+            $toadd[] = ['name'  => User::getTypeName(1),
                              'value' => $tmp];
          }
       }
@@ -3359,7 +3383,7 @@ class CommonDBTM extends CommonGLPI {
           && ($this->getType() != 'Group')) {
          $tmp = Dropdown::getDropdownName("glpi_groups", $this->getField('groups_id'));
          if ((strlen($tmp) != 0) && ($tmp != '&nbsp;')) {
-            $toadd[] = ['name'  => __('Group'),
+            $toadd[] = ['name'  => Group::getTypeName(1),
                              'value' => $tmp];
          }
       }
@@ -3678,22 +3702,27 @@ class CommonDBTM extends CommonGLPI {
           'name' => __('Characteristics')
       ];
 
-      $tab[] = [
-         'id'            => 1,
-         'table'         => $this->getTable(),
-         'field'         => 'name',
-         'name'          => __('Name'),
-         'datatype'      => 'itemlink',
-         'massiveaction' => false,
-         'autocomplete'  => true,
-      ];
+      if ($this->isField('name')) {
+         $tab[] = [
+            'id'            => 1,
+            'table'         => $this->getTable(),
+            'field'         => 'name',
+            'name'          => __('Name'),
+            'datatype'      => 'itemlink',
+            'massiveaction' => false,
+            'autocomplete'  => true,
+         ];
+      }
 
-      if ($this->maybeRecursive()) {
-         $tab[] = ['id'       => 86,
-                   'table'    => $this->getTable(),
-                   'field'    => 'is_recursive',
-                   'name'     => __('Child entities'),
-                   'datatype' =>'bool'];
+      if ($this->isField('is_recursive')) {
+         $tab[] = [
+            'id'       => 86,
+            'table'      => $this->getTable(),
+            'field'      => 'is_recursive',
+            'name'       => __('Child entities'),
+            'datatype'   => 'bool',
+            'searchtype' => 'equals',
+         ];
       }
 
       // add objectlock search options
@@ -3719,7 +3748,7 @@ class CommonDBTM extends CommonGLPI {
          return $options;
       }
 
-      if (defined('TU_USER') && $itemtype != null) {
+      if (defined('TU_USER') && $itemtype != null && $itemtype != 'AllAssets') {
          $item = new $itemtype;
          $all_options = $item->searchOptions();
       }
@@ -3874,9 +3903,8 @@ class CommonDBTM extends CommonGLPI {
          MassiveAction::getAddTransferList($actions);
       }
 
-      //massive action to link appliances from possible item types
       if (in_array(static::getType(), Appliance::getTypes(true)) && static::canUpdate()) {
-         $actions['Appliance'.MassiveAction::CLASS_ACTION_SEPARATOR.'add_item'] = __('Associate to appliance');
+         $actions['Appliance' . MassiveAction::CLASS_ACTION_SEPARATOR . 'add_item'] = _x('button', 'Associate to an appliance');
       }
 
       return $actions;
@@ -3900,7 +3928,7 @@ class CommonDBTM extends CommonGLPI {
     *                   and may have moreparams)
     *    - used : array / Already used items ID: not to display in dropdown (default empty)
     *
-    * @return void display the dropdown
+    * @return string|void display the dropdown
    **/
    static function dropdown($options = []) {
       /// TODO try to revert usage : Dropdown::show calling this function
@@ -4123,7 +4151,7 @@ class CommonDBTM extends CommonGLPI {
 
       return ['id'          => __('ID'),
                    'serial'      => __('Serial number'),
-                   'entities_id' => __('Entity')];
+                   'entities_id' => Entity::getTypeName(1)];
    }
 
 
@@ -4946,7 +4974,7 @@ class CommonDBTM extends CommonGLPI {
       } else {
          echo "<tr><th>".$item->getTypeName(1)."</th>";
          if (Session::isMultiEntitiesMode()) {
-            echo "<th>".__('Entity')."</th>";
+            echo "<th>".Entity::getTypeName(1)."</th>";
          }
          echo "<th>".__('Templates')."</th></tr>";
       }
@@ -5527,5 +5555,39 @@ class CommonDBTM extends CommonGLPI {
       }
 
       return $data;
+   }
+
+   /**
+    * Friendly names may uses multiple fields (e.g user: first name + last name)
+    * Return the computed criteria to use in a WHERE clause.
+    *
+    * @param string $filter
+    * @return array
+    */
+   public static function getFriendlyNameSearchCriteria(string $filter): array {
+      $table      = static::getTable();
+      $name_field = static::getNameField();
+      $name       = DBmysql::quoteName("$table.$name_field");
+      $filter     = strtolower($filter);
+
+      return [
+         'RAW' => [
+            "LOWER($name)" => ['LIKE', "%$filter%"],
+         ]
+      ];
+   }
+
+   /**
+    * Friendly names may uses multiple fields (e.g user: first name + last name)
+    * Return the computed field name to use in a SELECT clause.
+    *
+    * @param string $alias
+    * @return mixed
+    */
+   public static function getFriendlyNameFields(string $alias = "name") {
+      $table = static::getTable();
+      $name_field = static::getNameField();
+
+      return "$table.$name_field AS $alias";
    }
 }

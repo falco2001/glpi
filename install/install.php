@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -93,7 +93,7 @@ function choose_language() {
    // fix missing param for js drodpown
    $CFG_GLPI['ajax_limit_count'] = 15;
 
-   Dropdown::showLanguages("language", ['value' => "en_GB"]);
+   Dropdown::showLanguages("language", ['value' => $_SESSION['glpilanguage']]);
    echo "</p>";
    echo "";
    echo "<p class='submit'><input type='hidden' name='install' value='lang_select'>";
@@ -598,11 +598,20 @@ function checkConfigFile() {
    }
 }
 
-if (!isset($_POST["install"])) {
+if (!isset($_SESSION['can_process_install']) || !isset($_POST["install"])) {
    $_SESSION = [];
 
+   $_SESSION["glpilanguage"] = Session::getPreferredLanguage();
+
    checkConfigFile();
-   header_html("Select your language");
+
+   // Add a flag that will be used to validate that installation can be processed.
+   // This flag is put here just after checking that DB config file does not exist yet.
+   // It is mandatory to validate that `Etape_4` to `Etape_6` are not used outside installation process
+   // to change GLPI base URL without even being authenticated.
+   $_SESSION['can_process_install'] = true;
+
+   header_html(__("Select your language"));
    choose_language();
 
 } else {
@@ -621,7 +630,7 @@ if (!isset($_POST["install"])) {
    switch ($_POST["install"]) {
       case "lang_select" : // lang ok, go accept licence
          checkConfigFile();
-         header_html(__('License'));
+         header_html(SoftwareLicense::getTypeName(1));
          acceptLicense();
          break;
 

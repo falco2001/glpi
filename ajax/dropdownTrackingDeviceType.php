@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -69,12 +69,17 @@ if ($isValidItemtype) {
    }
    echo "<br>";
    $field_id = Html::cleanId("dropdown_".$_POST['myname'].$rand);
-   $p = ['itemtype'            => $itemtype,
-              'entity_restrict'     => $_POST['entity_restrict'],
-              'table'               => $table,
-              'multiple'            => $_POST["multiple"],
-              'myname'              => $_POST["myname"],
-              'rand'                => $_POST["rand"]];
+   $p = [
+      'itemtype'            => $itemtype,
+      'entity_restrict'     => $_POST['entity_restrict'],
+      'table'               => $table,
+      'multiple'            => $_POST["multiple"],
+      'myname'              => $_POST["myname"],
+      'rand'                => $_POST["rand"],
+      '_idor_token'         => Session::getNewIDORToken($itemtype, [
+         'entity_restrict' => $_POST['entity_restrict'],
+      ]),
+   ];
 
    if (isset($_POST["used"]) && !empty($_POST["used"])) {
       if (isset($_POST["used"][$itemtype])) {

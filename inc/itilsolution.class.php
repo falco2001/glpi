@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -131,6 +131,8 @@ class ITILSolution extends CommonDBChild {
       $this->item = $item;
       $item->check($item->getID(), READ);
 
+      $entities_id = isset($options['entities_id']) ? $options['entities_id'] : $item->getEntityID();
+
       if ($item instanceof Ticket && $this->isNewItem()) {
          $ti = new Ticket_Ticket();
          $open_child = $ti->countOpenChildren($item->getID());
@@ -169,11 +171,9 @@ class ITILSolution extends CommonDBChild {
          echo "<tr class='tab_bg_2'>";
          echo "<td>"._n('Solution template', 'Solution templates', 1)."</td><td>";
 
-         $entity = isset($options['entities_id']) ? $options['entities_id'] : $this->getEntityID();
-
          SolutionTemplate::dropdown([
             'value'    => 0,
-            'entity'   => $entity,
+            'entity'   => $entities_id,
             'rand'     => $rand_template,
             // Load type and solution from bookmark
             'toupdate' => [
@@ -197,7 +197,7 @@ class ITILSolution extends CommonDBChild {
       }
 
       echo "<tr class='tab_bg_2'>";
-      echo "<td>".__('Solution type')."</td><td>";
+      echo "<td>".SolutionType::getTypeName(1)."</td><td>";
 
       echo Html::hidden('itemtype', ['value' => $item->getType()]);
       echo Html::hidden('items_id', ['value' => $item->getID()]);
@@ -207,7 +207,7 @@ class ITILSolution extends CommonDBChild {
       if ($canedit) {
          SolutionType::dropdown(['value'  => $this->getField('solutiontypes_id'),
                                  'rand'   => $rand_type,
-                                 'entity' => $this->getEntityID()]);
+                                 'entity' => $entities_id]);
       } else {
          echo Dropdown::getDropdownName('glpi_solutiontypes',
                                         $this->getField('solutiontypes_id'));
@@ -280,7 +280,9 @@ class ITILSolution extends CommonDBChild {
    function prepareInputForAdd($input) {
       $input['users_id'] = Session::getLoginUserID();
 
-      if ($this->item == null) {
+      if ($this->item == null
+         || (isset($input['itemtype']) && isset($input['items_id']))
+      ) {
          $this->item = new $input['itemtype'];
          $this->item->getFromDB($input['items_id']);
       }
@@ -347,27 +349,30 @@ class ITILSolution extends CommonDBChild {
          Ticket_Ticket::manageLinkedTicketsOnSolved($this->item->getID(), $this);
       }
 
-      $status = $item::SOLVED;
+      if (!isset($this->input['_linked_ticket'])) {
+         $status = $item::SOLVED;
 
-      //handle autoclose, for tickets only
-      if ($item->getType() == Ticket::getType()) {
-         $autoclosedelay =  Entity::getUsedConfig(
-            'autoclose_delay',
-            $this->item->getEntityID(),
-            '',
-            Entity::CONFIG_NEVER
-         );
+         //handle autoclose, for tickets only
+         if ($item->getType() == Ticket::getType()) {
+            $autoclosedelay =  Entity::getUsedConfig(
+               'autoclose_delay',
+               $this->item->getEntityID(),
+               '',
+               Entity::CONFIG_NEVER
+            );
 
-         // 0 = immediatly
-         if ($autoclosedelay == 0) {
-            $status = $item::CLOSED;
+            // 0 = immediatly
+            if ($autoclosedelay == 0) {
+               $status = $item::CLOSED;
+            }
          }
+
+         $this->item->update([
+            'id'     => $this->item->getID(),
+            'status' => $status
+         ]);
       }
 
-      $this->item->update([
-         'id'     => $this->item->getID(),
-         'status' => $status
-      ]);
       parent::post_addItem();
    }
 

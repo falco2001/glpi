@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -60,11 +60,12 @@ class CronTaskLog extends CommonDBTM{
 
       $result = $DB->delete(
          'glpi_crontasklogs', [
-            'crontasks_id' => 'id',
-            new \QueryExpression("UNIX_TIMESTAMP(date) < UNIX_TIMESTAMP()-$secs")
+            'crontasks_id' => $id,
+            new \QueryExpression("UNIX_TIMESTAMP(" . $DB->quoteName("date") . ") < UNIX_TIMESTAMP()-$secs")
          ]
       );
-      return $result->rowCount();
+
+      return $result ? $DB->affectedRows() : 0;
    }
 
 

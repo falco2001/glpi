@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -302,7 +302,7 @@ class NetworkAlias extends FQDNLabel {
       }
       $header_end .= "<th>".__('Name')."</th>";
       $header_end .= "<th>"._n('Internet domain', 'Internet domains', 1)."</th>";
-      $header_end .= "<th>".__('Entity')."</th>";
+      $header_end .= "<th>".Entity::getTypeName(1)."</th>";
       $header_end .= "</tr>";
       echo $header_begin.$header_top.$header_end;
 

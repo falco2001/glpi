@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -93,7 +93,7 @@ class Domain extends CommonDropdown {
          'id'                 => '2',
          'table'              => 'glpi_domaintypes',
          'field'              => 'name',
-         'name'               => __('Type'),
+         'name'               => _n('Type', 'Types', 1),
          'datatype'           => 'dropdown'
       ];
 
@@ -136,7 +136,7 @@ class Domain extends CommonDropdown {
          'field'              => 'items_id',
          'nosearch'           => true,
          'massiveaction'      => false,
-         'name'               => _n('Associated items', 'Associated items', 2),
+         'name'               => _n('Associated item', 'Associated items', Session::getPluralNumber()),
          'forcegroupby'       => true,
          'joinparams'         => [
             'jointype'           => 'child'
@@ -156,16 +156,8 @@ class Domain extends CommonDropdown {
          'field'              => 'name',
          'linkfield'          => 'groups_id_tech',
          'name'               => __('Group in charge'),
-         'condition'          => '`is_assign`',
+         'condition'          => ['is_assign' => 1],
          'datatype'           => 'dropdown'
-      ];
-
-      $tab[] = [
-         'id'                 => '11',
-         'table'              => $this->getTable(),
-         'field'              => 'is_helpdesk_visible',
-         'name'               => __('Associable to a ticket'),
-         'datatype'           => 'bool'
       ];
 
       $tab[] = [
@@ -197,7 +189,7 @@ class Domain extends CommonDropdown {
          'id'                 => '80',
          'table'              => 'glpi_entities',
          'field'              => 'completename',
-         'name'               => __('Entity'),
+         'name'               => Entity::getTypeName(1),
          'datatype'           => 'dropdown'
       ];
 
@@ -276,6 +268,7 @@ class Domain extends CommonDropdown {
       $this->addStandardTab('Change_Item', $ong, $options);
       $this->addStandardTab('Contract_Item', $ong, $options);
       $this->addStandardTab('Document_Item', $ong, $options);
+      $this->addStandardTab('Certificate_Item', $ong, $options);
       $this->addStandardTab('Link', $ong, $options);
       $this->addStandardTab('Notepad', $ong, $options);
       $this->addStandardTab('Log', $ong, $options);
@@ -326,7 +319,7 @@ class Domain extends CommonDropdown {
       Html::showDateField("date_creation", ['value' => $this->fields["date_creation"]]);
       echo "</td>";
 
-      echo "<td>" . __('Type') . "</td><td>";
+      echo "<td>" . _n('Type', 'Types', 1) . "</td><td>";
       Dropdown::show('DomainType', ['name'   => "domaintypes_id",
                                                       'value'  => $this->fields["domaintypes_id"],
                                                       'entity' => $this->fields["entities_id"]]);
@@ -351,11 +344,8 @@ class Domain extends CommonDropdown {
       echo "</tr>";
 
       echo "<tr class='tab_bg_1'>";
-      echo "<td>" . __('Associable to a ticket') . "</td><td>";
-      Dropdown::showYesNo('is_helpdesk_visible', $this->fields['is_helpdesk_visible']);
-      echo "</td>";
       echo "<td>" . __('Group in charge') . "</td>";
-      echo "<td>";
+      echo "<td colspan='3'>";
       Dropdown::show('Group', ['name'      => "groups_id_tech",
                                     'value'     => $this->fields["groups_id_tech"],
                                     'entity'    => $this->fields["entities_id"],
@@ -621,7 +611,7 @@ class Domain extends CommonDropdown {
    /**
     * Cron action on domains : ExpiredDomains or DomainsWhichExpire
     *
-    * @param CronTask $task for log, if NULL display
+    * @param CronTask $task CronTask for log, if NULL display
     *
     *
     * @return int
@@ -784,5 +774,9 @@ class Domain extends CommonDropdown {
 
    public function getCanonicalName() {
       return rtrim($this->fields['name'], '.') . '.';
+   }
+
+   static function getIcon() {
+      return "fas fa-globe-americas";
    }
 }

@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -118,9 +118,6 @@ class NetworkPortEthernet extends NetworkPortInstantiation {
    }
 
 
-   /**
-    * @see NetworkPortInstantiation::getInstantiationHTMLTableHeaders
-   **/
    function getInstantiationHTMLTableHeaders(HTMLTableGroup $group, HTMLTableSuperHeader $super,
                                              HTMLTableSuperHeader $internet_super = null,
                                              HTMLTableHeader $father = null,
@@ -137,16 +134,13 @@ class NetworkPortEthernet extends NetworkPortInstantiation {
 
       Netpoint::getHTMLTableHeader('NetworkPortEthernet', $group, $super, $header, $options);
 
-      $group->addHeader('Outlet', __('Network outlet'), $super, $header);
+      $group->addHeader('Outlet', _n('Network outlet', 'Network outlets', 1), $super, $header);
 
       parent::getInstantiationHTMLTableHeaders($group, $super, $internet_super, $header, $options);
       return $header;
    }
 
 
-   /**
-    * @see NetworkPortInstantiation::getPeerInstantiationHTMLTable()
-   **/
    protected function getPeerInstantiationHTMLTable(NetworkPort $netport, HTMLTableRow $row,
                                                     HTMLTableCell $father = null,
                                                     array $options = []) {
@@ -169,13 +163,10 @@ class NetworkPortEthernet extends NetworkPortInstantiation {
    }
 
 
-   /**
-    * @see NetworkPortInstantiation::getInstantiationHTMLTable()
-   **/
    function getInstantiationHTMLTable(NetworkPort $netport, HTMLTableRow $row,
                                       HTMLTableCell $father = null, array $options = []) {
 
-      return parent::getInstantiationHTMLTableWithPeer($netport, $row, $father, $options);
+      return $this->getInstantiationHTMLTableWithPeer($netport, $row, $father, $options);
    }
 
 
@@ -189,11 +180,14 @@ class NetworkPortEthernet extends NetworkPortInstantiation {
 
       $tab[] = [
          'id'                 => '10',
-         'table'              => $this->getTable(),
+         'table'              => NetworkPort::getTable(),
          'field'              => 'mac',
          'datatype'           => 'mac',
          'name'               => __('MAC'),
-         'massiveaction'      => false
+         'massiveaction'      => false,
+         'joinparams'         => [
+            'jointype'           => 'empty'
+         ]
       ];
 
       $tab[] = [

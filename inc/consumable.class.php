@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -103,7 +103,12 @@ class Consumable extends CommonDBChild {
 
    /**
     * send back to stock
-   **/
+    *
+    * @param array $input Array of item fields. Only the ID field is used here.
+    * @param int $history Not used
+    *
+    * @return bool
+    */
    function backToStock(array $input, $history = 1) {
       global $DB;
 

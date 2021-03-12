@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -138,13 +138,55 @@ class Controller extends CommonGLPI {
       }
 
       $plugin_inst = new Plugin();
+
+      if ($plugin_inst->getFromDBbyDir($this->plugin_key)
+          && !in_array($plugin_inst->fields['state'], [Plugin::ANEW, Plugin::NOTINSTALLED, Plugin::NOTUPDATED])) {
+         // Plugin was already existing, make it "not updated" before checking its state
+         // to prevent message like 'Plugin "xxx" version changed. It has been deactivated as its update process has to be launched.'.
+         $plugin_inst->update([
+            'id'    => $plugin_inst->fields['id'],
+            'state' => Plugin::NOTUPDATED
+         ]);
+      }
+
       $plugin_inst->checkPluginState($this->plugin_key);
       $plugin_inst->getFromDBbyDir($this->plugin_key);
 
-      // inform api plugin has been downloaded
+      // inform api the plugin has been downloaded
       $api->incrementPluginDownload($this->plugin_key);
 
-      return $plugin_inst->fields['state'] ?? Plugin::UNKNOWN;
+      // try to install (or update) directly the plugin
+      return $this->installPlugin();
+   }
+
+
+   /**
+    * Get plugin archive from its download URL and serve it to the browser.
+    *
+    * @return void
+    */
+   function proxifyPluginArchive(): void {
+      // close session to prevent blocking other requests
+      session_write_close();
+
+      $api    = self::getAPI();
+      $plugin = $api->getPlugin($this->plugin_key, true);
+
+      if (!array_key_exists('installation_url', $plugin) || empty($plugin['installation_url'])) {
+         return;
+      }
+
+      $url      = $plugin['installation_url'];
+      $filename = basename(parse_url($url, PHP_URL_PATH));
+      $dest     = GLPI_TMP_DIR . '/' . mt_rand() . '.' . $filename;
+
+      if (!$api->downloadArchive($url, $dest, $this->plugin_key, false)) {
+         http_response_code(500);
+         echo(__('Unable to download plugin archive.'));
+         return;
+      }
+
+      Toolbox::sendFile($dest, $filename);
    }
 
    /**
@@ -340,7 +382,7 @@ class Controller extends CommonGLPI {
          $_SESSION['MESSAGE_AFTER_REDIRECT'] = [];
       }
 
-      return $state== Plugin::NOTACTIVATED;
+      return $state == Plugin::NOTACTIVATED;
    }
 
 

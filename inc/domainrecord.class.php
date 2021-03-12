@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -99,8 +99,7 @@ class DomainRecord extends CommonDBChild {
          'id'                 => '4',
          'table'              => $this->getTable(),
          'field'              => 'ttl',
-         'name'               => __('TTL'),
-         'datatype'           => 'number'
+         'name'               => __('TTL')
       ];
 
       $tab[] = [
@@ -157,15 +156,11 @@ class DomainRecord extends CommonDBChild {
          'id'                 => '80',
          'table'              => 'glpi_entities',
          'field'              => 'completename',
-         'name'               => __('Entity'),
+         'name'               => Entity::getTypeName(1),
          'datatype'           => 'dropdown'
       ];
 
       return $tab;
-   }
-
-   public function canCreateItem() {
-      return count($_SESSION['glpiactiveprofile']['managed_domainrecordtypes']);
    }
 
    static function canCreate() {
@@ -183,6 +178,27 @@ class DomainRecord extends CommonDBChild {
    }
 
 
+   static function canDelete() {
+      if (count($_SESSION['glpiactiveprofile']['managed_domainrecordtypes'])) {
+         return true;
+      }
+      return parent::canDelete();
+   }
+
+
+   static function canPurge() {
+      if (count($_SESSION['glpiactiveprofile']['managed_domainrecordtypes'])) {
+         return true;
+      }
+      return parent::canPurge();
+   }
+
+
+   public function canCreateItem() {
+      return count($_SESSION['glpiactiveprofile']['managed_domainrecordtypes']);
+   }
+
+
    public function canUpdateItem() {
       return parent::canUpdateItem()
          && ($_SESSION['glpiactiveprofile']['managed_domainrecordtypes'] == [-1]
@@ -196,6 +212,15 @@ class DomainRecord extends CommonDBChild {
          || in_array($this->fields['domainrecordtypes_id'], $_SESSION['glpiactiveprofile']['managed_domainrecordtypes'])
          );
    }
+
+
+   function canPurgeItem() {
+      return parent::canPurgeItem()
+         && ($_SESSION['glpiactiveprofile']['managed_domainrecordtypes'] == [-1]
+         || in_array($this->fields['domainrecordtypes_id'], $_SESSION['glpiactiveprofile']['managed_domainrecordtypes'])
+         );
+   }
+
 
    function defineTabs($options = []) {
       $ong = [];
@@ -378,7 +403,7 @@ class DomainRecord extends CommonDBChild {
     *
     * @param Domain $domain Domain object
     *
-    * @return void
+    * @return void|boolean (display) Returns false if there is a rights error.
     **/
    public static function showForDomain(Domain $domain) {
       global $DB;
@@ -387,7 +412,8 @@ class DomainRecord extends CommonDBChild {
       if (!$domain->can($instID, READ)) {
          return false;
       }
-      $canedit = $domain->can($instID, UPDATE) || count($_SESSION['glpiactiveprofile']['managed_domainrecordtypes']);
+      $canedit = $domain->can($instID, UPDATE)
+                 || count($_SESSION['glpiactiveprofile']['managed_domainrecordtypes']);
       $rand    = mt_rand();
 
       $iterator = $DB->request([
@@ -477,10 +503,10 @@ class DomainRecord extends CommonDBChild {
          echo "<th width='10'>" . Html::getCheckAllAsCheckbox('mass' . __CLASS__ . $rand) . "</th>";
       }
 
-      echo "<th>" . __('Type') . "</th>";
+      echo "<th>" . _n('Type', 'Types', 1) . "</th>";
       echo "<th>" . __('Name') . "</th>";
       echo "<th>" . __('TTL') . "</th>";
-      echo "<th>" . __('Target') . "</th>";
+      echo "<th>" . _n('Target', 'Targets', 1) . "</th>";
       echo "</tr>";
 
       while ($data = $iterator->next()) {
@@ -489,7 +515,7 @@ class DomainRecord extends CommonDBChild {
 
          $ID = "";
 
-         if ($_SESSION["glpiis_ids_visible"] || empty($data["name"])) {
+         if ($_SESSION["glpiis_ids_visible"] || empty(self::getDisplayName($domain, $data['name']))) {
             $ID = " (" . $data["id"] . ")";
          }
 

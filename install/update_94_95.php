@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -36,7 +36,7 @@
  * @return bool for success (will die for most error)
 **/
 function update94to95() {
-   global $DB, $migration;
+   global $CFG_GLPI, $DB, $migration;
 
    $updateresult     = true;
    $ADDTODISPLAYPREF = [];
@@ -1183,7 +1183,6 @@ HTML
       'users_id_tech'         => 'integer',
       'groups_id_tech'        => 'integer',
       'others'                => 'string',
-      'is_helpdesk_visible'   => 'boolean',
       'is_deleted'            => 'boolean',
    ];
    $dindex = $dfields;
@@ -1195,9 +1194,6 @@ HTML
    foreach ($dfields as $dfield => $dtype) {
       if (!$DB->fieldExists('glpi_domains', $dfield)) {
          $options = ['after' => $after];
-         if ($dfield == 'is_helpdesk_visible') {
-            $options['value'] = 1;
-         }
          $migration->addField("glpi_domains", $dfield, $dtype, $options);
       }
       $after = $dfield;
@@ -1481,7 +1477,7 @@ HTML
    if (!$DB->tableExists('glpi_impactcontexts')) {
       $query = "CREATE TABLE `glpi_impactcontexts` (
             `id` INT(11) NOT NULL AUTO_INCREMENT,
-            `positions` TEXT NOT NULL DEFAULT '' COLLATE 'utf8_unicode_ci',
+            `positions` TEXT NOT NULL COLLATE 'utf8_unicode_ci',
             `zoom` FLOAT NOT NULL DEFAULT '0',
             `pan_x` FLOAT NOT NULL DEFAULT '0',
             `pan_y` FLOAT NOT NULL DEFAULT '0',
@@ -1517,47 +1513,17 @@ HTML
    $migration->addConfig(['ssologout_url' => '']);
    /** SSO logout URL */
 
-   /** A doc_item to rule them all! */
-   $itemtypes = [
-      'ITILFollowup' => 'content',
-      'ITILSolution' => 'content',
-      'Reminder'     => 'text',
-      'KnowbaseItem' => 'answer'
-   ];
-   foreach (['Change', 'Problem', 'Ticket'] as $itiltype) {
-      $itemtypes[$itiltype] = 'content';
-      $itemtypes[$itiltype . 'Task'] = 'content';
-   }
-   $docs_input =[];
-   foreach ($itemtypes as $itemtype => $field) {
-      // Check ticket and child items (followups, tasks, solutions) contents
-      $regexPattern = 'document\\\.send\\\.php\\\?docid=[0-9]+';
-      $user_field = is_a($itemtype, CommonITILObject::class, true) ? 'users_id_recipient' : 'users_id';
-      $result = $DB->request([
-         'SELECT' => ['id', $field, $user_field],
-         'FROM'   => $itemtype::getTable(),
-         'WHERE'  => [
-            $field => ['REGEXP', $regexPattern]
-         ]
-      ]);
-      while ($data = $result->next()) {
-         preg_match('/document\\.send\\.php\\?docid=([0-9]+)/', $data[$field], $matches);
-         $docs_input[] = [
-            'documents_id'       => $matches[1],
-            'itemtype'           => $itemtype,
-            'items_id'           => $data['id'],
-            'timeline_position'  => CommonITILObject::NO_TIMELINE,
-            'users_id'           => $data[$user_field],
-         ];
-      }
-   }
-   $ditem = new Document_Item();
-   foreach ($docs_input as $doc_input) {
-      if (!$ditem->getFromDBbyCrit($doc_input)) {
-         $ditem->add($doc_input);
-      }
-   }
-   /** /A doc_item to rule them all! */
+   /** Document_Item unicity */
+   $migration->dropKey('glpi_documents_items', 'unicity');
+   $migration->migrationOneTable('glpi_documents_items');
+   $migration->addKey(
+      'glpi_documents_items',
+      ['documents_id', 'itemtype', 'items_id', 'timeline_position'],
+      'unicity',
+      'UNIQUE'
+   );
+   $migration->migrationOneTable('glpi_documents_items');
+   /** /Document_Item unicity */
 
    /** Appliances & webapps */
    require __DIR__ . '/update_94_95/appliances.php';
@@ -1590,20 +1556,6 @@ HTML
       }
    }
    /** /update project and itil task templates **/
-
-   // ************ Keep it at the end **************
-   foreach ($ADDTODISPLAYPREF as $type => $tab) {
-      $rank = 1;
-      foreach ($tab as $newval) {
-         $DB->updateOrInsert("glpi_displaypreferences", [
-            'rank'      => $rank++
-         ], [
-            'users_id'  => "0",
-            'itemtype'  => $type,
-            'num'       => $newval,
-         ]);
-      }
-   }
 
    /** Add new option to mailcollector */
    $migration->addField("glpi_mailcollectors", "add_cc_to_observer", "boolean");
@@ -1981,10 +1933,6 @@ HTML
    $migration->addConfig([Impact::CONF_ENABLED => $impact_default]);
    /**  /Add default impact itemtypes */
 
-   /** Appliances & webapps */
-   require __DIR__ . '/update_94_95/appliances.php';
-   /** /Appliances & webapps */
-
    // Add new field states in contract
    if (!$DB->fieldExists('glpi_states', 'is_visible_contract')) {
       $migration->addField('glpi_states', 'is_visible_contract', 'bool', [
@@ -2020,6 +1968,51 @@ HTML
       $migration->dropField(MailCollector::getTable(), 'use_kerberos');
    }
    // /use_kerberos
+
+   // add missing fields to simcard as they can be associated to tickets
+   if (!$DB->fieldExists(Item_DeviceSimcard::getTable(), 'users_id')) {
+      $migration->addField(Item_DeviceSimcard::getTable(), 'users_id', 'int', [
+         'value' => 0,
+         'after' => 'lines_id'
+      ]);
+      $migration->addKey(Item_DeviceSimcard::getTable(), 'users_id');
+   }
+   if (!$DB->fieldExists(Item_DeviceSimcard::getTable(), 'groups_id')) {
+      $migration->addField(Item_DeviceSimcard::getTable(), 'groups_id', 'int', [
+         'value' => 0,
+         'after' => 'users_id'
+      ]);
+      $migration->addKey(Item_DeviceSimcard::getTable(), 'groups_id');
+   }
+   // /add missing fields to simcard as they can be associated to tickets
+
+   // remove superflu is_helpdesk_visible
+   if ($DB->fieldExists(Appliance::getTable(), 'is_helpdesk_visible')) {
+      $migration->dropField(Appliance::getTable(), 'is_helpdesk_visible');
+   }
+   if ($DB->fieldExists(Domain::getTable(), 'is_helpdesk_visible')) {
+      $migration->dropField(Domain::getTable(), 'is_helpdesk_visible');
+   }
+   // /remove superflu is_helpdesk_visible
+
+   // GLPI Network registration key config
+   $migration->addConfig(['glpinetwork_registration_key' => null]);
+
+   if (isset($CFG_GLPI['glpinetwork_registration_key']) && !empty($CFG_GLPI['glpinetwork_registration_key'])) {
+      // encrypt existing keys if not yet encrypted
+      // if it can be base64 decoded then json decoded, we can consider that it was not encrypted
+      if (($b64_decoded = base64_decode($CFG_GLPI['glpinetwork_registration_key'], true)) !== false
+          && json_decode($b64_decoded, true) !== null) {
+         Config::setConfigurationValues(
+            'core',
+            [
+               'glpinetwork_registration_key' => Toolbox::sodiumEncrypt($CFG_GLPI['glpinetwork_registration_key'])
+            ]
+         );
+      }
+   }
+
+   // /GLPI Network registration key config
 
    // ************ Keep it at the end **************
    foreach ($ADDTODISPLAYPREF as $type => $tab) {

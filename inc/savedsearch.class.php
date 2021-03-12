@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -203,9 +203,18 @@ class SavedSearch extends CommonDBTM implements ExtraVisibilityCriteria {
       $tab[] = ['id'                 => 3,
                 'table'              => User::getTable(),
                 'field'              => 'name',
-                'name'               => __('User'),
+                'name'               => User::getTypeName(1),
                 'datatype'           => 'dropdown'
                ];
+
+      $tab[] = [
+         'id'  => 4,
+         'table'           => $this->getTable(),
+         'field'           => 'is_private',
+         'name'            => __('Is private'),
+         'datatype'        => 'bool',
+         'massiveaction'   => false,
+      ];
 
       $tab[] = ['id'                 => '8',
                 'table'              => $this->getTable(),
@@ -402,7 +411,7 @@ class SavedSearch extends CommonDBTM implements ExtraVisibilityCriteria {
             ]
          );
          echo "</td></tr>";
-         echo "<tr class='tab_bg_2'><td>".__('Entity')."</td>";
+         echo "<tr class='tab_bg_2'><td>".Entity::getTypeName(1)."</td>";
          echo "</td><td>";
          Entity::dropdown(['value' => $this->fields["entities_id"]]);
          echo "</td><td>". __('Child entities')."</td><td>";
@@ -417,6 +426,9 @@ class SavedSearch extends CommonDBTM implements ExtraVisibilityCriteria {
       }
       if ($ID <= 0) { // add
          echo Html::hidden('users_id', ['value' => $this->fields['users_id']]);
+         if (!self::canCreate()) {
+            echo Html::hidden('is_private', ['value' => 1]);
+         }
       } else {
          echo Html::hidden('id', ['value' => $ID]);
       }
@@ -1417,7 +1429,7 @@ class SavedSearch extends CommonDBTM implements ExtraVisibilityCriteria {
 
       if ($notif->isNewItem()) {
          $notif->check(-1, CREATE);
-         $notif->add(['name'            => __('Saved search') . ' ' . $this->getName(),
+         $notif->add(['name'            => SavedSearch::getTypeName(1) . ' ' . $this->getName(),
                       'entities_id'     => $_SESSION["glpidefault_entity"],
                       'itemtype'        => SavedSearch_Alert::getType(),
                       'event'           => 'alert_' . $this->getID(),

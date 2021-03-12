@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -146,17 +146,17 @@ class NotificationSettingConfig extends CommonDBTM {
 
       if ($notifs_on) {
          $out .= "<table class='tab_cadre'>";
-         $out .= "<tr><th>" . _n('Notification', 'Notifications', 2)."</th></tr>";
+         $out .= "<tr><th>" . _n('Notification', 'Notifications', Session::getPluralNumber())."</th></tr>";
 
          /* Glocal parameters */
          if (Session::haveRight("config", READ)) {
             $out .= "<tr class='tab_bg_1'><td class='center'><a href='notificationtemplate.php'>" .
-                  _n('Notification template', 'Notification templates', 2) ."</a></td> </tr>";
+                  _n('Notification template', 'Notification templates', Session::getPluralNumber()) ."</a></td> </tr>";
          }
 
          if (Session::haveRight("notification", READ) && $notifs_on) {
             $out .= "<tr class='tab_bg_1'><td class='center'>".
-                  "<a href='notification.php'>". _n('Notification', 'Notifications', 2)."</a></td></tr>";
+                  "<a href='notification.php'>". _n('Notification', 'Notifications', Session::getPluralNumber())."</a></td></tr>";
          } else {
             $out .= "<tr class='tab_bg_1'><td class='center'>" .
                __('Unable to configure notifications: please configure at least one followup type using the above configuration.') .

@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -37,6 +37,9 @@ use DbTestCase;
 class Project extends DbTestCase {
 
    public function testAutocalculatePercentDone() {
+
+      $this->login(); // must be logged as ProjectTask uses Session::getLoginUserID()
+
       $project = new \Project();
       $project_id_1 = $project->add([
          'name' => 'Project 1',

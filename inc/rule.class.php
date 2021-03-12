@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -42,6 +42,7 @@ if (!defined('GLPI_ROOT')) {
  *   - actions
 **/
 class Rule extends CommonDBTM {
+   use Glpi\Features\Clonable;
 
    public $dohistory             = true;
 
@@ -91,6 +92,13 @@ class Rule extends CommonDBTM {
    const AND_MATCHING            = "AND";
    const OR_MATCHING             = "OR";
 
+
+   public function getCloneRelations() :array {
+      return [
+         RuleAction::class,
+         RuleCriteria::class
+      ];
+   }
 
 
    static function getTable($classname = null) {
@@ -420,7 +428,7 @@ class Rule extends CommonDBTM {
          }
 
          $menu['dictionnary']['options']['os']['title']
-                           = __('Operating system');
+                           = OperatingSystem::getTypeName(1);
          $menu['dictionnary']['options']['os']['page']
                            = '/front/ruledictionnaryoperatingsystem.php';
          $menu['dictionnary']['options']['os']['links']['search']
@@ -432,7 +440,7 @@ class Rule extends CommonDBTM {
          }
 
          $menu['dictionnary']['options']['os_sp']['title']
-                           = __('Service pack');
+                           = OperatingSystemServicePack::getTypeName(1);
          $menu['dictionnary']['options']['os_sp']['page']
                            = '/front/ruledictionnaryoperatingsystemservicepack.php';
          $menu['dictionnary']['options']['os_sp']['links']['search']
@@ -444,7 +452,7 @@ class Rule extends CommonDBTM {
          }
 
          $menu['dictionnary']['options']['os_version']['title']
-                           = __('Version of the operating system');
+                           = OperatingSystemVersion::getTypeName(1);
          $menu['dictionnary']['options']['os_version']['page']
                            = '/front/ruledictionnaryoperatingsystemversion.php';
          $menu['dictionnary']['options']['os_version']['links']['search']
@@ -456,7 +464,7 @@ class Rule extends CommonDBTM {
          }
 
          $menu['dictionnary']['options']['os_arch']['title']
-                           = __('Operating system architecture');
+                           = OperatingSystemArchitecture::getTypeName(1);
          $menu['dictionnary']['options']['os_arch']['page']
                            = '/front/ruledictionnaryoperatingsystemarchitecture.php';
          $menu['dictionnary']['options']['os_arch']['links']['search']
@@ -559,9 +567,6 @@ class Rule extends CommonDBTM {
                = "<i class='ma-icon fas fa-arrows-alt-v'></i>".
                  __('Move');
          }
-         $actions[__CLASS__.MassiveAction::CLASS_ACTION_SEPARATOR.'duplicate']
-            = "<i class='ma-icon far fa-clone'></i>".
-              _x('button', 'Duplicate');
          $actions[__CLASS__.MassiveAction::CLASS_ACTION_SEPARATOR.'export']
             = "<i class='ma-icon fas fa-file-download'></i>".
               _x('button', 'Export');
@@ -578,23 +583,6 @@ class Rule extends CommonDBTM {
    static function showMassiveActionsSubForm(MassiveAction $ma) {
 
       switch ($ma->getAction()) {
-         case 'duplicate' :
-            $entity_assign = false;
-            foreach ($ma->getitems() as $itemtype => $ids) {
-               if ($item = getItemForItemtype($itemtype)) {
-                  if ($item->isEntityAssign()) {
-                     $entity_assign = true;
-                     break;
-                  }
-               }
-            }
-            if ($entity_assign) {
-               Entity::dropdown();
-            }
-            echo "<br><br>".Html::submit(_x('button', 'Duplicate'),
-                                         ['name' => 'massiveaction']);
-            return true;
-
          case 'move_rule' :
             $input = $ma->getInput();
             $values = ['after'  => __('After'),
@@ -635,23 +623,6 @@ class Rule extends CommonDBTM {
    static function processMassiveActionsForOneItemtype(MassiveAction $ma, CommonDBTM $item,
                                                        array $ids) {
       switch ($ma->getAction()) {
-         case 'duplicate':
-            $rulecollection = new RuleCollection();
-            foreach ($ids as $id) {
-               if ($item->getFromDB($id)) {
-                  if ($rulecollection->duplicateRule($id)) {
-                     $ma->itemDone($item->getType(), $id, MassiveAction::ACTION_OK);
-                  } else {
-                     $ma->itemDone($item->getType(), $id, MassiveAction::ACTION_KO);
-                     $ma->addMessage($item->getErrorMessage(ERROR_ON_ACTION));
-                  }
-               } else {
-                  $ma->itemDone($item->getType(), $id, MassiveAction::ACTION_KO);
-                  $ma->addMessage($item->getErrorMessage(ERROR_NOT_FOUND));
-               }
-            }
-            break;
-
          case 'export':
             if (count($ids)) {
                $_SESSION['exportitems'] = $ids;
@@ -757,7 +728,7 @@ class Rule extends CommonDBTM {
          'id'                 => '80',
          'table'              => 'glpi_entities',
          'field'              => 'completename',
-         'name'               => __('Entity'),
+         'name'               => Entity::getTypeName(1),
          'massiveaction'      => false,
          'datatype'           => 'dropdown'
       ];
@@ -914,7 +885,9 @@ class Rule extends CommonDBTM {
          }
       }
       if ($canedit) {
-         echo "<input type='hidden' name='ranking' value='".$this->fields["ranking"]."'>";
+         if (!$this->isNewID($ID)) {
+            echo "<input type='hidden' name='ranking' value='".$this->fields["ranking"]."'>";
+         }
          echo "<input type='hidden' name='sub_type' value='".get_class($this)."'>";
       }
       echo "</td></tr>\n";
@@ -1946,10 +1919,27 @@ class Rule extends CommonDBTM {
    function prepareInputForAdd($input) {
 
       // Before adding, add the ranking of the new rule
-      $input["ranking"] = $this->getNextRanking();
+      $input["ranking"] = $input['ranking'] ?? $this->getNextRanking();
       //If no uuid given, generate a new one
       if (!isset($input['uuid'])) {
          $input["uuid"] = self::getUuid();
+      }
+
+      if ($this->getType() == 'Rule' && !isset($input['sub_type'])) {
+          \Toolbox::logError('Sub type not specified creating a new rule');
+          return false;
+      }
+
+      if (!isset($input['sub_type'])) {
+         $input['sub_type'] = $this->getType();
+      } else if ($this->getType() != 'Rule' && $input['sub_type'] != $this->getType()) {
+         \Toolbox::logWarning(
+            sprintf(
+               'Creating a %s rule with %s subtype.',
+               $this->getType(),
+               $input['sub_type']
+            )
+         );
       }
 
       return $input;
@@ -2039,7 +2029,7 @@ class Rule extends CommonDBTM {
       echo "<td class='center b'>"._n('Criterion', 'Criteria', 1)."</td>";
       echo "<td class='center b'>".__('Condition')."</td>";
       echo "<td class='center b'>".__('Reason')."</td>";
-      echo "<td class='center b'>".__('Validation')."</td>";
+      echo "<td class='center b'>"._n('Validation', 'Validations', 1)."</td>";
       echo "</tr>\n";
 
       foreach ($check_results as $ID => $criteria_result) {
@@ -2060,7 +2050,7 @@ class Rule extends CommonDBTM {
       echo "<table class='tab_cadrehov'>";
       echo "<tr><th colspan='2'>" . __('Rule results') . "</th></tr>";
       echo "<tr class='tab_bg_1'>";
-      echo "<td class='center b'>".__('Validation')."</td><td>";
+      echo "<td class='center b'>"._n('Validation', 'Validations', 1)."</td><td>";
       echo Dropdown::getYesNo($global_result)."</td></tr>";
 
       $output = $this->preProcessPreviewResults($output);
@@ -3182,5 +3172,20 @@ class Rule extends CommonDBTM {
 
    static function getIcon() {
       return "fas fa-book";
+   }
+
+   public function prepareInputForClone($input) {
+      //get ranking
+      $nextRanking = $this->getNextRanking();
+
+      //Update fields of the new collection
+      $input['name']        = sprintf(__('Copy of %s'), $input['name']);
+      $input['is_active']   = 0;
+      $input['ranking']     = $nextRanking;
+      $input['uuid']        = static::getUuid();
+
+      $input = Toolbox::addslashes_deep($input);
+
+      return parent::prepareInputForClone($input);
    }
 }

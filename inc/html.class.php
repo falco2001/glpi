@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -57,6 +57,12 @@ class Html {
    static function clean($value, $striptags = true, $keep_bad = 2) {
       $value = Html::entity_decode_deep($value);
 
+      // Change <email@domain> to email@domain so it is not removed by htmLawed
+      $regex = "/(<[^>]+?@[^;]+?>)/";
+      $value = preg_replace_callback($regex, function($matches) {
+         return substr($matches[1], 1, (strlen($matches[1]) - 2));
+      }, $value);
+
       // Clean MS office tags
       $value = str_replace(["<![if !supportLists]>", "<![endif]>"], '', $value);
 
@@ -82,18 +88,13 @@ class Html {
       // Neutralize not well formatted html tags
       $value = preg_replace("/(<)([^>]*<)/", "&lt;$2", $value);
 
-      $value = htmLawed(
-         $value,
-         [
-            'elements'         => ($striptags) ? 'none' : '',
-            'deny_attribute'   => 'on*',
-            'keep_bad'         => $keep_bad, // 1: neutralize tag and content, 2 : remove tag and neutralize content
-            'comment'          => 1, // 1: remove
-            'cdata'            => 1, // 1: remove
-            'direct_list_nest' => 1, // 1: Allow usage of ul/ol tags nested in other ul/ol tags
-            'schemes'          => '*: aim, app, feed, file, ftp, gopher, http, https, irc, mailto, news, nntp, sftp, ssh, tel, telnet'
-         ]
-      );
+      $config = Toolbox::getHtmLawedSafeConfig();
+      $config['keep_bad'] = $keep_bad; // 1: neutralize tag and content, 2 : remove tag and neutralize content
+      if ($striptags) {
+         $config['elements'] = 'none';
+      }
+
+      $value = htmLawed($value, $config);
 
       // Special case : remove the 'denied:' for base64 img in case the base64 have characters
       // combinaison introduce false positive
@@ -362,13 +363,15 @@ class Html {
    /**
     * Make a good string from the unix timestamp $sec
     *
-    * @param integer $time         timestamp
-    * @param boolean $display_sec  display seconds ?
-    * @param boolean $use_days     use days for display ?
+    * @param int|float  $time         timestamp
+    * @param boolean    $display_sec  display seconds ?
+    * @param boolean    $use_days     use days for display ?
     *
     * @return string
    **/
    static function timestampToString($time, $display_sec = true, $use_days = true) {
+
+      $time = (float)$time;
 
       $sign = '';
       if ($time < 0) {
@@ -613,7 +616,7 @@ class Html {
                   $class = 'warn_msg';
                   break;
                case INFO:
-                  $title = __s('Information');
+                  $title = _sn('Information', 'Information', 1);
                   $class = 'info_msg';
                   break;
             }
@@ -691,6 +694,7 @@ class Html {
       displayAjaxMessageAfterRedirect = function() {
          // attach MESSAGE_AFTER_REDIRECT to body
          $('.message_after_redirect').remove();
+         $('[id^=\"message_after_redirect_\"]').remove();
          $.ajax({
             url:  '".$CFG_GLPI['root_doc']."/ajax/displayMessageAfterRedirect.php',
             success: function(html) {
@@ -808,13 +812,15 @@ class Html {
             echo "took  ".array_sum($DEBUG_SQL['times'])."s</div>";
 
             echo "<table class='tab_cadre'><tr><th>N&#176; </th><th>Queries</th><th>Time</th>";
-            echo "<th>Errors</th></tr>";
+            echo "<th>Rows</th><th>Errors</th></tr>";
 
             foreach ($DEBUG_SQL['queries'] as $num => $query) {
                echo "<tr class='tab_bg_".(($num%2)+1)."'><td>$num</td><td>";
                echo self::cleanSQLDisplay($query);
                echo "</td><td>";
                echo $DEBUG_SQL['times'][$num];
+               echo "</td><td>";
+               echo $DEBUG_SQL['rows'][$num] ?? 0;
                echo "</td><td>";
                if (isset($DEBUG_SQL['errors'][$num])) {
                   echo $DEBUG_SQL['errors'][$num];
@@ -1299,6 +1305,10 @@ class Html {
             Html::requireJs('gridstack');
          }
 
+         if (in_array('sortable', $jslibs)) {
+            Html::requireJs('sortable');
+         }
+
          if (in_array('tinymce', $jslibs)) {
             Html::requireJs('tinymce');
          }
@@ -1455,7 +1465,7 @@ JAVASCRIPT;
    /**
     * @since 0.90
     *
-    * @return string
+    * @return array
    **/
    static function getMenuInfos() {
       global $CFG_GLPI;
@@ -2750,16 +2760,21 @@ JAVASCRIPT;
     *
     * @param string $name     name of the element
     * @param array  $options  array of possible options:
-    *      - value      : default value to display (default '')
-    *      - maybeempty : may be empty ? (true by default)
-    *      - canedit    :  could not modify element (true by default)
-    *      - min        :  minimum allowed date (default '')
-    *      - max        : maximum allowed date (default '')
-    *      - showyear   : should we set/diplay the year? (true by default)
-    *      - display    : boolean display of return string (default true)
-    *      - rand       : specific rand value (default generated one)
-    *      - yearrange  : set a year range to show in drop-down (default '')
-    *      - required   : required field (will add required attribute)
+    *      - value        : default value to display (default '')
+    *      - maybeempty   : may be empty ? (true by default)
+    *      - canedit      :  could not modify element (true by default)
+    *      - min          :  minimum allowed date (default '')
+    *      - max          : maximum allowed date (default '')
+    *      - showyear     : should we set/diplay the year? (true by default)
+    *      - display      : boolean display of return string (default true)
+    *      - calendar_btn : boolean display calendar icon (default true)
+    *      - clear_btn    : boolean display clear icon (default true)
+    *      - range        : boolean set the datepicket in range mode
+    *      - rand         : specific rand value (default generated one)
+    *      - yearrange    : set a year range to show in drop-down (default '')
+    *      - required     : required field (will add required attribute)
+    *      - placeholder  : text to display when input is empty
+    *      - on_change    : function to execute when date selection changed
     *
     * @return integer|string
     *    integer if option display=true (random part of elements id)
@@ -2769,18 +2784,24 @@ JAVASCRIPT;
       global $CFG_GLPI;
 
       $p = [
-         'value'      => '',
-         'maybeempty' => true,
-         'canedit'    => true,
-         'min'        => '',
-         'max'        => '',
-         'showyear'   => false,
-         'display'    => true,
-         'rand'       => mt_rand(),
-         'yearrange'  => '',
-         'multiple'   => false,
-         'size'       => 10,
-         'required'   => false,
+         'value'        => '',
+         'defaultDate'  => '',
+         'maybeempty'   => true,
+         'canedit'      => true,
+         'min'          => '',
+         'max'          => '',
+         'showyear'     => false,
+         'display'      => true,
+         'range'        => false,
+         'rand'         => mt_rand(),
+         'calendar_btn' => true,
+         'clear_btn'    => true,
+         'yearrange'    => '',
+         'multiple'     => false,
+         'size'         => 10,
+         'required'     => false,
+         'placeholder'  => '',
+         'on_change'    => '',
       ];
 
       foreach ($options as $key => $val) {
@@ -2795,20 +2816,28 @@ JAVASCRIPT;
       $disabled = !$p['canedit']
          ? " disabled='disabled'"
          : "";
-      $clear    = $p['maybeempty'] && $p['canedit']
+
+      $calendar_btn = $p['calendar_btn']
+         ? "<a class='input-button' data-toggle>
+               <i class='far fa-calendar-alt fa-lg pointer'></i>
+            </a>"
+         : "";
+      $clear_btn = $p['clear_btn'] && $p['maybeempty'] && $p['canedit']
          ? "<a data-clear  title='".__s('Clear')."'>
                <i class='fa fa-times-circle pointer'></i>
             </a>"
          : "";
 
+      $mode = $p['range']
+         ? "mode: 'range',"
+         : "";
+
       $output = <<<HTML
       <div class="no-wrap flatpickr" id="showdate{$p['rand']}">
-         <input type="text" name="{$name}" value="{$p['value']}" size="{$p['size']}"
-                {$required} {$disabled} data-input>
-         <a class="input-button" data-toggle>
-            <i class="far fa-calendar-alt fa-lg pointer"></i>
-         </a>
-         $clear
+         <input type="text" name="{$name}" size="{$p['size']}"
+                {$required} {$disabled} data-input placeholder="{$p['placeholder']}">
+         $calendar_btn
+         $clear_btn
       </div>
 HTML;
 
@@ -2824,9 +2853,14 @@ HTML;
          ? "mode: 'multiple',"
          : "";
 
+      $value = is_array($p['value'])
+         ? json_encode($p['value'])
+         : "'{$p['value']}'";
+
       $js = <<<JS
       $(function() {
          $("#showdate{$p['rand']}").flatpickr({
+            defaultDate: {$value},
             altInput: true, // Show the user a readable date (as per altFormat), but return something totally different to the server.
             altFormat: '{$date_format}',
             dateFormat: 'Y-m-d',
@@ -2836,6 +2870,14 @@ HTML;
             {$min_attr}
             {$max_attr}
             {$multiple_attr}
+            {$mode}
+            onChange: function(selectedDates, dateStr, instance) {
+               {$p['on_change']}
+            },
+            allowInput: true,
+            onClose(dates, currentdatestring, picker){
+               picker.setDate(picker.altInput.value, true, picker.config.altFormat)
+            }
          });
       });
 JS;
@@ -2902,6 +2944,7 @@ JS;
     *   - display    : boolean display or get string (default true)
     *   - rand       : specific random value (default generated one)
     *   - required   : required field (will add required attribute)
+    *   - on_change    : function to execute when date selection changed
     *
     * @return integer|string
     *    integer if option display=true (random part of elements id)
@@ -2923,6 +2966,7 @@ JS;
          'display'    => true,
          'rand'       => mt_rand(),
          'required'   => false,
+         'on_change'  => '',
       ];
 
       foreach ($options as $key => $val) {
@@ -3006,6 +3050,13 @@ HTML;
             minuteIncrement: "{$p['timestep']}",
             {$min_attr}
             {$max_attr}
+            onChange: function(selectedDates, dateStr, instance) {
+               {$p['on_change']}
+            },
+            allowInput: true,
+            onClose(dates, currentdatestring, picker){
+               picker.setDate(picker.altInput.value, true, picker.config.altFormat)
+            }
          });
       });
 JS;
@@ -3032,6 +3083,7 @@ JS;
     *   - display    : boolean display or get string (default true)
     *   - rand       : specific random value (default generated one)
     *   - required   : required field (will add required attribute)
+    *   - on_change  : function to execute when date selection changed
     * @return void
     */
    public static function showTimeField($name, $options = []) {
@@ -3047,6 +3099,7 @@ JS;
          'display'    => true,
          'rand'       => mt_rand(),
          'required'   => false,
+         'on_change'  => '',
       ];
 
       foreach ($options as $key => $val) {
@@ -3113,7 +3166,10 @@ HTML;
             noCalendar: true, // only time picker
             enableSeconds: true,
             locale: "{$CFG_GLPI['languages'][$_SESSION['glpilanguage']][3]}",
-            minuteIncrement: "{$p['timestep']}"
+            minuteIncrement: "{$p['timestep']}",
+            onChange: function(selectedDates, dateStr, instance) {
+               {$p['on_change']}
+            }
          });
       });
 JS;
@@ -3813,7 +3869,7 @@ JS;
          // init editor
          tinyMCE.init({
             language_url: '$language_url',
-            invalid_elements: 'form,iframe,script,@[onclick|ondblclick|'
+            invalid_elements: 'form,object,embed,iframe,script,@[onclick|ondblclick|'
                + 'onmousedown|onmouseup|onmouseover|onmousemove|onmouseout|onkeypress|'
                + 'onkeydown|onkeyup]',
             browser_spellcheck: true,
@@ -3821,14 +3877,14 @@ JS;
             elements: '$name',
             relative_urls: false,
             remove_script_host: false,
-            content_css: '$darker_css',
             entity_encoding: 'raw',
             paste_data_images: $('.fileupload').length,
             menubar: false,
             statusbar: false,
             skin_url: '".$CFG_GLPI['root_doc']."/css/tiny_mce/skins/light',
-            content_css: '".$CFG_GLPI['root_doc']."/css/tiny_mce_custom.css',
+            content_css: '$darker_css,".$CFG_GLPI['root_doc']."/css/tiny_mce_custom.css',
             cache_suffix: '?v=".GLPI_VERSION."',
+            min_height: '150px',
             setup: function(editor) {
                if ($('#$name').attr('required') == 'required') {
                   $('#$name').closest('form').find('input[type=submit]').click(function() {
@@ -3849,6 +3905,12 @@ JS;
                      if ($('#$name').val() == '') {
                         $('.mce-edit-area').addClass('required');
                      }
+                  });
+                  editor.on('paste', function (e) {
+                     // Remove required on paste event
+                     // This is only needed when pasting with right click (context menu)
+                     // Pasting with Ctrl+V is already handled by keyup event above
+                     $('.mce-edit-area').removeClass('required');
                   });
                }
                editor.on('SaveContent', function (contentEvent) {
@@ -3932,8 +3994,10 @@ JS;
    **/
    static function setRichTextContent($name, $content, $rand, $readonly = false) {
 
-      // Init html editor
-      Html::initEditorSystem($name, $rand, true, $readonly);
+      // Init html editor (if name of textarea is provided)
+      if (!empty($name)) {
+         Html::initEditorSystem($name, $rand, true, $readonly);
+      }
 
       // Neutralize non valid HTML tags
       $content = Html::clean($content, false, 1);
@@ -4698,14 +4762,11 @@ JS;
    static function jsAjaxDropdown($name, $field_id, $url, $params = []) {
       global $CFG_GLPI;
 
-      if (!isset($params['value'])) {
+      if (!array_key_exists('value', $params)) {
          $value = 0;
-      } else {
-         $value = $params['value'];
-      }
-      if (!isset($params['value'])) {
          $valuename = Dropdown::EMPTY_VALUE;
       } else {
+         $value = $params['value'];
          $valuename = $params['valuename'];
       }
       $on_change = '';
@@ -4718,6 +4779,14 @@ JS;
          $width = $params["width"];
          unset($params["width"]);
       }
+
+      $placeholder = $params['placeholder'] ?? '';
+      $allowclear =  "false";
+      if (strlen($placeholder) > 0 && !$params['display_emptychoice']) {
+         $allowclear = "true";
+      }
+
+      unset($params['placeholder']);
       unset($params['value']);
       unset($params['valuename']);
 
@@ -4740,8 +4809,12 @@ JS;
          $options['multiple'] = 'multiple';
          $options['selected'] = $params['values'];
       } else {
+         $values = [];
+
          // simple select (multiple = no)
-         $values = ["$value" => $valuename];
+         if ($value !== null) {
+            $values = ["$value" => $valuename];
+         }
       }
 
       // display select tag
@@ -4761,6 +4834,8 @@ JS;
 
          $('#$field_id').select2({
             width: '$width',
+            placeholder: '$placeholder',
+            allowClear: $allowclear,
             minimumInputLength: 0,
             quietMillis: 100,
             dropdownAutoWidth: true,
@@ -4906,7 +4981,8 @@ JS;
             'fullscreen'   => true,
             'zoom'         => true,
          ],
-         'rand'   => mt_rand()
+         'rand'               => mt_rand(),
+         'gallery_item_class' => ''
       ];
 
       if (is_array($options) && count($options)) {
@@ -4960,15 +5036,24 @@ JS;
       $out .= "<div class='pswp__caption__center'></div>";
       $out .= "</div></div></div></div>";
 
-      $out .= "<div class='pswp-img{$p['rand']} timeline_img_preview' itemscope itemtype='http://schema.org/ImageGallery'>";
+      $out .= "<div class='pswp-img{$p['rand']} {$p['gallery_item_class']}' itemscope itemtype='http://schema.org/ImageGallery'>";
       foreach ($imgs as $img) {
+         if (!isset($img['thumbnail_src'])) {
+            $img['thumbnail_src'] = $img['src'];
+         }
          $out .= "<figure itemprop='associatedMedia' itemscope itemtype='http://schema.org/ImageObject'>";
          $out .= "<a href='{$img['src']}' itemprop='contentUrl' data-index='0'>";
-         $out .= "<img src='{$img['src']}&context=timeline' itemprop='thumbnail'>";
+         $out .= "<img src='{$img['thumbnail_src']}' itemprop='thumbnail'>";
          $out .= "</a>";
          $out .= "</figure>";
       }
       $out .= "</div>";
+
+      // Decode images urls
+      $imgs = array_map(function($img) {
+         $img['src'] = html_entity_decode($img['src']);
+         return $img;
+      }, $imgs);
 
       $items_json = json_encode($imgs);
       $dltext = __('Download');
@@ -4989,7 +5074,15 @@ JS;
             }
 
             var lightBox = new PhotoSwipe(pswp, PhotoSwipeUI_Default, {$items_json}, options);
+            $(pswp).closest('.glpi_tabs').css('z-index', 50); // be sure that tabs are displayed above form in vsplit
             lightBox.init();
+
+            lightBox.listen(
+               'destroy',
+               function() {
+                  $(this.container).closest('.glpi_tabs').css('z-index', ''); // restore z-index from CSS
+               }
+            );
         });
       })(jQuery);
 
@@ -5142,7 +5235,7 @@ JAVASCRIPT;
     *
     * @return string
     */
-   static function select($name, array $values, $options = []) {
+   static function select($name, array $values = [], $options = []) {
       $selected = false;
       if (isset($options['selected'])) {
          $selected = $options['selected'];
@@ -5161,7 +5254,7 @@ JAVASCRIPT;
                $key == $selected
                || is_array($selected) && in_array($key, $selected))
             ) ? ' selected="selected"' : '',
-            $value
+            Html::entities_deep($value)
          );
       }
       $select .= '</select>';
@@ -5564,7 +5657,9 @@ JAVASCRIPT;
          $display .= "<input id='fileupload{$p['rand']}' type='file' name='".$p['name']."[]'
                          data-url='".$CFG_GLPI["root_doc"]."/ajax/fileupload.php'
                          data-form-data='{\"name\": \"".$p['name']."\",
-                                          \"showfilesize\": \"".$p['showfilesize']."\"}'".($p['multiple']?" multiple='multiple'":"").">";
+                                          \"showfilesize\": \"".$p['showfilesize']."\"}'"
+                         .($p['multiple']?" multiple='multiple'":"")
+                         .($p['onlyimages']?" accept='.gif,.png,.jpg,.jpeg'":"").">";
          $display .= "<div id='progress{$p['rand']}' style='display:none'>".
                  "<div class='uploadbar' style='width: 0%;'></div></div>";
          $display .= "</div>";
@@ -5581,7 +5676,7 @@ JAVASCRIPT;
                               ? "$('#{$p['dropZone']}')"
                               : "false").",
                acceptFileTypes: ".($p['onlyimages']
-                                    ? "'/(\.|\/)(gif|jpe?g|png)$/i'"
+                                    ? "/(\.|\/)(gif|jpe?g|png)$/i"
                                     : "undefined").",
                progressall: function(event, data) {
                   var progress = parseInt(data.loaded / data.total * 100, 10);
@@ -5690,7 +5785,7 @@ JAVASCRIPT;
       } else {
          $display .= Html::scriptBlock("
                         $(document).ready(function() {
-                           $('".$p['editor_id']."').autogrow();
+                           $('#".$p['editor_id']."').autogrow();
                         });
                      ");
       }
@@ -6046,9 +6141,16 @@ JAVASCRIPT;
    /**
     * This function provides a mecanism to send html form by ajax
     *
+    * @param string $selector selector of a HTML form
+    * @param string $success  jacascript code of the success callback
+    * @param string $error    jacascript code of the error callback
+    * @param string $complete jacascript code of the complete callback
+    *
+    * @see https://api.jquery.com/jQuery.ajax/
+    *
     * @since 9.1
    **/
-   static function ajaxForm($selector, $success = "console.log(html);") {
+   static function ajaxForm($selector, $success = "console.log(html);", $error = "console.error(html)", $complete = '') {
       echo Html::scriptBlock("
       $(function() {
          var lastClicked = null;
@@ -6073,6 +6175,12 @@ JAVASCRIPT;
                data: formData,
                success: function(html) {
                   $success
+               },
+               error: function(html) {
+                  $error
+               },
+               complete: function(html) {
+                  $complete
                }
             });
          });
@@ -6095,7 +6203,7 @@ JAVASCRIPT;
          if(typeof message == 'string') {
             message = message.replace('\\n', '<br>');
          }
-         caption = caption || '".__s("Information")."';
+         caption = caption || '"._sn('Information', 'Information', 1)."';
          $('<div></div>').html(message).dialog({
             title: caption,
             buttons: {
@@ -6432,6 +6540,9 @@ JAVASCRIPT;
          case 'gridstack':
             $_SESSION['glpi_js_toload'][$name][] = 'public/lib/gridstack.js';
             break;
+         case 'sortable':
+            $_SESSION['glpi_js_toload'][$name][] = 'public/lib/sortable.js';
+            break;
          case 'rack':
             $_SESSION['glpi_js_toload'][$name][] = 'js/rack.js';
             $_SESSION['glpi_js_toload'][$name][] = 'lib/jqueryplugins/jquery.ui.touch-punch.js';
@@ -6507,7 +6618,7 @@ JAVASCRIPT;
       self::redefineAlert();
       self::redefineConfirm();
 
-      if (isset($CFG_GLPI['notifications_ajax']) && $CFG_GLPI['notifications_ajax']) {
+      if (isset($CFG_GLPI['notifications_ajax']) && $CFG_GLPI['notifications_ajax'] && !Session::isImpersonateActive()) {
          $options = [
             'interval'  => ($CFG_GLPI['notifications_ajax_check_interval'] ? $CFG_GLPI['notifications_ajax_check_interval'] : 5) * 1000,
             'sound'     => $CFG_GLPI['notifications_ajax_sound'] ? $CFG_GLPI['notifications_ajax_sound'] : false,

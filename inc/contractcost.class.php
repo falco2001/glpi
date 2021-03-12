@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -155,7 +155,7 @@ class ContractCost extends CommonDBChild {
          'id'                 => '14',
          'table'              => $this->getTable(),
          'field'              => 'cost',
-         'name'               => __('Cost'),
+         'name'               => _n('Cost', 'Costs', 1),
          'datatype'           => 'decimal'
       ];
 
@@ -163,7 +163,7 @@ class ContractCost extends CommonDBChild {
          'id'                 => '18',
          'table'              => 'glpi_budgets',
          'field'              => 'name',
-         'name'               => _n('Budget', 'Budgets', 1),
+         'name'               => Budget::getTypeName(1),
          'datatype'           => 'dropdown'
       ];
 
@@ -171,7 +171,7 @@ class ContractCost extends CommonDBChild {
          'id'                 => '80',
          'table'              => 'glpi_entities',
          'field'              => 'completename',
-         'name'               => __('Entity'),
+         'name'               => Entity::getTypeName(1),
          'massiveaction'      => false,
          'datatype'           => 'dropdown'
       ];
@@ -179,25 +179,6 @@ class ContractCost extends CommonDBChild {
       return $tab;
    }
 
-   /**
-    * get the request results to get items associated to the given one (defined by $itemtype and $items_id)
-    *
-    * @param string  $itemtype          the type of the item we want the resulting items to be associated to
-    * @param string  $items_id          the name of the item we want the resulting items to be associated to
-    *
-    * @return array the items associated to the given one (empty if none was found)
-   **/
-   static function getItemsAssociationRequest($itemtype, $items_id) {
-      global $DB;
-
-      return $DB->request([
-         'SELECT' => 'id',
-         'FROM'   => static::getTable(),
-         'WHERE'  => [
-         static::$items_id  => $items_id
-         ]
-      ]);
-   }
 
    /**
     * Duplicate all costs from a contract template to its clone
@@ -297,7 +278,7 @@ class ContractCost extends CommonDBChild {
       echo "<input type='hidden' name='contracts_id' value='".$this->fields['contracts_id']."'>";
       Html::autocompletionTextField($this, 'name');
       echo "</td>";
-      echo "<td>".__('Cost')."</td>";
+      echo "<td>"._n('Cost', 'Costs', 1)."</td>";
       echo "<td>";
       echo "<input type='text' name='cost' value='".Html::formatNumber($this->fields["cost"], true)."'
              size='14'>";
@@ -319,7 +300,7 @@ class ContractCost extends CommonDBChild {
       Html::showDateField("end_date", ['value' => $this->fields['end_date']]);
       echo "</td></tr>";
 
-      echo "<tr class='tab_bg_1'><td>".__('Budget')."</td>";
+      echo "<tr class='tab_bg_1'><td>".Budget::getTypeName(1)."</td>";
       echo "<td>";
       Budget::dropdown(['value' => $this->fields["budgets_id"]]);
       echo "</td></tr>";
@@ -334,7 +315,7 @@ class ContractCost extends CommonDBChild {
     * Print the contract costs
     *
     * @param Contract $contract
-    * @param boolean  $withtemplate Template or basic item
+    * @param integer  $withtemplate Template or basic item
     *
     * @return void
    **/
@@ -383,8 +364,8 @@ class ContractCost extends CommonDBChild {
          echo "<tr><th>".__('Name')."</th>";
          echo "<th>".__('Begin date')."</th>";
          echo "<th>".__('End date')."</th>";
-         echo "<th>".__('Budget')."</th>";
-         echo "<th>".__('Cost')."</th>";
+         echo "<th>".Budget::getTypeName(1)."</th>";
+         echo "<th>"._n('Cost', 'Costs', 1)."</th>";
          echo "</tr>";
 
          Session::initNavigateListItems(__CLASS__,
@@ -394,7 +375,7 @@ class ContractCost extends CommonDBChild {
                                              Contract::getTypeName(1), $contract->getName()));
 
          $total = 0;
-         while ($data = $iterator->next) {
+         while ($data = $iterator->next()) {
             echo "<tr class='tab_bg_2' ".
                   ($canedit
                      ? "style='cursor:pointer' onClick=\"viewEditCost".$data['contracts_id']."_".

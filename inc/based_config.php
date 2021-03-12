@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -72,9 +72,12 @@ include_once (GLPI_ROOT . "/inc/autoload.function.php");
       'GLPI_UPLOAD_DIR'      => '{GLPI_VAR_DIR}/_uploads', // Path for upload storage
 
       // Security constants
-      'GLPI_USE_CSRF_CHECK'  => '1',
-      'GLPI_CSRF_EXPIRES'    => '7200',
-      'GLPI_CSRF_MAX_TOKENS' => '100',
+      'GLPI_USE_CSRF_CHECK'            => '1',
+      'GLPI_CSRF_EXPIRES'              => '7200',
+      'GLPI_CSRF_MAX_TOKENS'           => '100',
+      'GLPI_USE_IDOR_CHECK'            => '1',
+      'GLPI_IDOR_EXPIRES'              => '7200',
+      'GLPI_ALLOW_IFRAME_IN_RICH_TEXT' => false,
 
       // Constants related to GLPI Project / GLPI Network external services
       'GLPI_TELEMETRY_URI'                => 'https://telemetry.glpi-project.org', // Telemetry project URL
@@ -84,7 +87,7 @@ include_once (GLPI_ROOT . "/inc/autoload.function.php");
       'GLPI_NETWORK_REGISTRATION_API_URL' => '{GLPI_NETWORK_SERVICES}/api/registration/',
       'GLPI_MARKETPLACE_PLUGINS_API_URI'  => '{GLPI_NETWORK_SERVICES}/api/glpi-plugins/',
       // TODO set false before final release of 9.5.0 and remove this comment
-      'GLPI_MARKETPLACE_PRERELEASES'      => true, // display pre-releases of plugins in marketplace
+      'GLPI_MARKETPLACE_PRERELEASES'      => false, // display pre-releases of plugins in marketplace
       'GLPI_USER_AGENT_EXTRA_COMMENTS'    => '', // Extra comment to add to GLPI User-Agent
 
       // Other constants
@@ -93,7 +96,6 @@ include_once (GLPI_ROOT . "/inc/autoload.function.php");
       'GLPI_DEMO_MODE'              => '0',
       // TODO GLPI_FORCE_EMPTY_SQL_MODE need to be set to 0 after review of all sql queries
       'GLPI_FORCE_EMPTY_SQL_MODE'   => '1', // for compatibility with mysql 5.7
-      'GLPI_FORCE_NATIVE_SQL_TYPES' => '1', // force mysql driver to retrieve int and float types correctly (and not convert them to strings)
    ];
 
    // Define constants values based on server env variables (i.e. defined using apache SetEnv directive)
@@ -142,8 +144,8 @@ include_once (GLPI_ROOT . "/inc/autoload.function.php");
    // Order in this array is important (priority to first found).
    if (!defined('PLUGINS_DIRECTORIES')) {
       define('PLUGINS_DIRECTORIES', [
-         GLPI_ROOT . '/plugins',
          GLPI_MARKETPLACE_DIR,
+         GLPI_ROOT . '/plugins',
       ]);
    } else if (!is_array(PLUGINS_DIRECTORIES)) {
       throw new \Exception('PLUGINS_DIRECTORIES constant value must be an array');

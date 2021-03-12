@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -625,7 +625,126 @@ class Dropdown extends DbTestCase {
                ],
                'count' => 1
             ]
-         ]
+         ], [
+            // search using id on CommonTreeDropdown but without "glpiis_ids_visible" set to true -> no results
+            'params' => [
+               'display_emptychoice'   => 0,
+               'itemtype'              => 'TaskCategory',
+               'searchText'            => getItemByTypeName('TaskCategory', '_subcat_1', true),
+            ],
+            'expected'  => [
+               'results' => [
+               ],
+               'count' => 0
+            ],
+            'session_params' => [
+               'glpiis_ids_visible' => false
+            ]
+         ], [
+            // search using id on CommonTreeDropdown with "glpiis_ids_visible" set to true -> results
+            'params' => [
+               'display_emptychoice'   => 0,
+               'itemtype'              => 'TaskCategory',
+               'searchText'            => getItemByTypeName('TaskCategory', '_subcat_1', true),
+            ],
+            'expected'  => [
+               'results' => [
+                  0 => [
+                     'text'      => 'Root entity',
+                     'children'  => [
+                        0 => [
+                           'id'             => getItemByTypeName('TaskCategory', '_cat_1', true),
+                           'text'           => '_cat_1',
+                           'level'          => 1,
+                           'disabled'       => true
+                        ],
+                        1 => [
+                           'id'             => getItemByTypeName('TaskCategory', '_subcat_1', true),
+                           'text'           => '_subcat_1 (' . getItemByTypeName('TaskCategory', '_subcat_1', true) . ')',
+                           'level'          => 2,
+                           'title'          => '_cat_1 > _subcat_1 - Comment for sub-category _subcat_1',
+                           'selection_text' => '_cat_1 > _subcat_1',
+                        ]
+                     ]
+                  ]
+               ],
+               'count' => 1
+            ],
+            'session_params' => [
+               'glpiis_ids_visible' => true
+            ]
+         ], [
+            // search using id on "not a CommonTreeDropdown" but without "glpiis_ids_visible" set to true -> no results
+            'params' => [
+               'display_emptychoice'   => 0,
+               'itemtype'              => 'DocumentType',
+               'searchText'            => getItemByTypeName('DocumentType', 'markdown', true),
+            ],
+            'expected'  => [
+               'results' => [
+               ],
+               'count' => 0
+            ],
+            'session_params' => [
+               'glpiis_ids_visible' => false
+            ]
+         ], [
+            // search using id on "not a CommonTreeDropdown" with "glpiis_ids_visible" set to true -> results
+            'params' => [
+               'display_emptychoice'   => 0,
+               'itemtype'              => 'DocumentType',
+               'searchText'            => getItemByTypeName('DocumentType', 'markdown', true),
+            ],
+            'expected'  => [
+               'results' => [
+                  0 => [
+                     'id'             => getItemByTypeName('DocumentType', 'markdown', true),
+                     'text'           => 'markdown (' . getItemByTypeName('DocumentType', 'markdown', true) . ')',
+                     'title'          => 'markdown',
+                  ]
+               ],
+               'count' => 1
+            ],
+            'session_params' => [
+               'glpiis_ids_visible' => true
+            ]
+         ], [
+            'params' => [
+               'display_emptychoice' => 0,
+               'itemtype'            => 'ComputerModel',
+            ],
+            'expected'  => [
+               'results'   => [
+                  [
+                     'id'     => getItemByTypeName('ComputerModel', '_test_computermodel_1', true),
+                     'text'   => '_test_computermodel_1 - CMP_ADEAF5E1',
+                     'title'  => '_test_computermodel_1 - CMP_ADEAF5E1',
+                  ],
+                  [
+                     'id'     => getItemByTypeName('ComputerModel', '_test_computermodel_2', true),
+                     'text'   => '_test_computermodel_2 - CMP_567AEC68',
+                     'title'  => '_test_computermodel_2 - CMP_567AEC68',
+                  ]
+               ],
+               'count'     => 2
+            ]
+         ], [
+            'params' => [
+               'display_emptychoice' => 0,
+               'itemtype'            => 'ComputerModel',
+               'searchText'          => 'CMP_56',
+            ],
+            'expected'  => [
+               'results'   => [
+                  [
+                     'id'     => getItemByTypeName('ComputerModel', '_test_computermodel_2', true),
+                     'text'   => '_test_computermodel_2 - CMP_567AEC68',
+                     'title'  => '_test_computermodel_2 - CMP_567AEC68',
+                  ]
+               ],
+               'count'     => 1
+            ]
+         ],
       ];
    }
 
@@ -633,6 +752,8 @@ class Dropdown extends DbTestCase {
     * @dataProvider getDropdownValueProvider
     */
    public function testGetDropdownValue($params, $expected, $session_params = []) {
+      $this->login();
+
       $bkp_params = [];
       //set session params if any
       if (count($session_params)) {
@@ -643,6 +764,8 @@ class Dropdown extends DbTestCase {
             $_SESSION[$param] = $value;
          }
       }
+
+      $params['_idor_token'] = $this->generateIdor($params);
 
       $result = \Dropdown::getDropdownValue($params, false);
 
@@ -804,6 +927,8 @@ class Dropdown extends DbTestCase {
             $_SESSION[$param] = $value;
          }
       }
+
+      $params['_idor_token'] = $this->generateIdor($params);
 
       $result = \Dropdown::getDropdownConnect($params, false);
 
@@ -1076,6 +1201,9 @@ class Dropdown extends DbTestCase {
     * @dataProvider getDropdownUsersProvider
     */
    public function testGetDropdownUsers($params, $expected) {
+      $this->login();
+
+      $params['_idor_token'] = \Session::getNewIDORToken('User');
       $result = \Dropdown::getDropdownUsers($params, false);
       $this->array($result)->isIdenticalTo($expected);
    }
@@ -1102,7 +1230,8 @@ class Dropdown extends DbTestCase {
          'display_emptychoice'   => true,
          'entity_restrict'       => 0,
          'page'                  => 1,
-         'page_limit'            => 10
+         'page_limit'            => 10,
+         '_idor_token'           => \Session::getNewIDORToken($location::getType())
       ];
       $values = \Dropdown::getDropdownValue($post);
       $values = (array)json_decode($values);
@@ -1159,7 +1288,8 @@ class Dropdown extends DbTestCase {
          'display_emptychoice'   => true,
          'entity_restrict'       => 0,
          'page'                  => 1,
-         'page_limit'            => 10
+         'page_limit'            => 10,
+         '_idor_token'           => \Session::getNewIDORToken($location::getType())
       ];
       $values = \Dropdown::getDropdownValue($post);
       $values = (array)json_decode($values);
@@ -1189,7 +1319,8 @@ class Dropdown extends DbTestCase {
          'display_emptychoice'   => true,
          'entity_restrict'       => 0,
          'page'                  => 1,
-         'page_limit'            => 10
+         'page_limit'            => 10,
+         '_idor_token'           => \Session::getNewIDORToken($location::getType())
       ];
       $values = \Dropdown::getDropdownValue($post);
       $values = (array)json_decode($values);
@@ -1199,5 +1330,13 @@ class Dropdown extends DbTestCase {
          ->array['results']
             ->hasSize(2);
 
+   }
+
+   private function generateIdor(array $params = []) {
+      $idor_add_params = [];
+      if (isset($params['entity_restrict'])) {
+         $idor_add_params['entity_restrict'] = $params['entity_restrict'];
+      }
+      return \Session::getNewIDORToken(($params['itemtype'] ?? ''), $idor_add_params);
    }
 }

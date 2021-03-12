@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -360,6 +360,9 @@ class ITILFollowup extends DbTestCase {
    }
 
    public function testScreenshotConvertedIntoDocument() {
+
+      $this->login(); // must be logged as Document_Item uses Session::getLoginUserID()
+
       // Test uploads for item creation
       $ticket = new \Ticket();
       $ticket->add([
@@ -420,6 +423,9 @@ class ITILFollowup extends DbTestCase {
    }
 
    public function testUploadDocuments() {
+
+      $this->login(); // must be logged as Document_Item uses Session::getLoginUserID()
+
       // Test uploads for item creation
       $ticket = new \Ticket();
       $ticket->add([

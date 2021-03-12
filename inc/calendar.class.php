@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -38,6 +38,7 @@ if (!defined('GLPI_ROOT')) {
  * Calendar Class
 **/
 class Calendar extends CommonDropdown {
+   use Glpi\Features\Clonable;
 
    // From CommonDBTM
    public $dohistory                   = true;
@@ -46,6 +47,14 @@ class Calendar extends CommonDropdown {
    static protected $forward_entity_to = ['CalendarSegment'];
 
    static $rightname = 'calendar';
+
+
+   public function getCloneRelations() :array {
+      return [
+         Calendar_Holiday::class,
+         CalendarSegment::class
+      ];
+   }
 
 
    /**
@@ -192,26 +201,23 @@ class Calendar extends CommonDropdown {
     */
    function duplicate($options = []) {
 
+      $input = Toolbox::addslashes_deep($this->fields);
+      unset($input['id']);
+
       if (is_array($options) && count($options)) {
          foreach ($options as $key => $val) {
             if (isset($this->fields[$key])) {
-               $this->fields[$key] = $val;
+               $input[$key] = $val;
             }
          }
       }
 
-      $input = $this->fields;
-      $oldID = $input['id'];
-      unset($input['id']);
-      if ($newID = $this->add($input)) {
-         Calendar_Holiday::cloneCalendar($oldID, $newID);
-         CalendarSegment::cloneCalendar($oldID, $newID);
-
+      if ($newID = $this->clone($input)) {
          $this->updateDurationCache($newID);
          return true;
       }
-      return false;
 
+      return false;
    }
 
 
@@ -234,6 +240,14 @@ class Calendar extends CommonDropdown {
    **/
    function isHoliday($date) {
       global $DB;
+
+      // Use a static cache to improve performances when multiple elements requires a computation
+      // on same calendars/dates.
+      static $result_cache = [];
+      $cache_key = $this->fields['id'] . '-' . date('Y-m-d', strtotime($date));
+      if (array_key_exists($cache_key, $result_cache)) {
+         return $result_cache[$cache_key];
+      }
 
       $result = $DB->request([
          'COUNT'        => 'cpt',
@@ -266,7 +280,11 @@ class Calendar extends CommonDropdown {
          ]
       ])->next();
 
-      return (int)$result['cpt'] > 0;
+      $is_holiday = (int)$result['cpt'] > 0;
+
+      $result_cache[$cache_key] = $is_holiday;
+
+      return $is_holiday;
    }
 
 
@@ -408,6 +426,11 @@ class Calendar extends CommonDropdown {
    function computeEndDate($start, $delay, $additional_delay = 0, $work_in_days = false, $end_of_working_day = false) {
 
       if (!isset($this->fields['id'])) {
+         return false;
+      }
+
+      if (!$this->hasAWorkingDay()) {
+         // Invalid calendar (no working day = unable to find any date inside calendar hours)
          return false;
       }
 
@@ -643,5 +666,4 @@ class Calendar extends CommonDropdown {
    static function getDayNumberInWeek($date) {
       return (int)date('w', $date);
    }
-
 }

@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -1759,9 +1759,9 @@ class Ticket extends DbTestCase {
 
       // check with very limited rights and redo "associate myself"
       $_SESSION['glpiactiveprofile']['ticket'] = \CREATE
-                                               + \Ticket::READMY;
-                                               + \Ticket::READALL;
-                                               + \Ticket::READGROUP;
+                                               + \Ticket::READMY
+                                               + \Ticket::READALL
+                                               + \Ticket::READGROUP
                                                + \Ticket::OWN; // OWN right must allow self-assign
       $this->integer((int) $ticket_user->add($input_ticket_user))->isGreaterThan(0);
       // restore rights
@@ -1815,43 +1815,43 @@ class Ticket extends DbTestCase {
    protected function computePriorityProvider() {
       return [
          [
-            'input'  => [
+            'input'    => [
                'urgency'   => 2,
                'impact'    => 2
             ],
-            '2',
-            '2',
-            '2'
+            'urgency'  => '2',
+            'impact'   => '2',
+            'priority' => '2'
          ], [
-            'input'  => [
+            'input'    => [
                'urgency'   => 5
             ],
-            '5',
-            '3',
-            '4'
+            'urgency'  => '5',
+            'impact'   => '3',
+            'priority' => '4'
          ], [
-            'input'  => [
+            'input'    => [
                'impact'   => 5
             ],
-            '3',
-            '5',
-            '4'
+            'urgency'  => '3',
+            'impact'   => '5',
+            'priority' => '4'
          ], [
-            'input'  => [
+            'input'    => [
                'urgency'   => 5,
                'impact'    => 5
             ],
-            '5',
-            '5',
-            '5'
+            'urgency'  => '5',
+            'impact'   => '5',
+            'priority' => '5'
          ], [
-            'input'  => [
+            'input'    => [
                'urgency'   => 5,
                'impact'    => 1
             ],
-            '5',
-            '1',
-            '2'
+            'urgency'  => '5',
+            'impact'   => '1',
+            'priority' => '2'
          ]
       ];
    }
@@ -2161,6 +2161,7 @@ class Ticket extends DbTestCase {
 
    public function testCronCloseTicket() {
       global $DB;
+      $this->login();
       // set default calendar and autoclose delay in root entity
       $entity = new \Entity;
       $this->boolean($entity->update([
@@ -2212,7 +2213,7 @@ class Ticket extends DbTestCase {
     * @see self::testTakeIntoAccountDelayComputationOnUpdate()
     */
    protected function takeIntoAccountDelayComputationProvider() {
-
+      $this->login();
       $group = new \Group();
       $group_id = $group->add(['name' => 'Test group']);
       $this->integer((int)$group_id)->isGreaterThan(0);
@@ -2505,12 +2506,12 @@ class Ticket extends DbTestCase {
    /**
     * Check computed status on ticket creation..
     *
-    * @param array   $input            Input used to create the ticket
-    * @param boolean $expected_status  Expected status
+    * @param array   $input     Input used to create the ticket
+    * @param boolean $expected  Expected status
     *
     * @dataProvider statusComputationOnCreateProvider
     */
-   public function testStatusComputationOnCreate(array $input, $expected_status) {
+   public function testStatusComputationOnCreate(array $input, $expected) {
 
       // Create a ticket
       $this->login();
@@ -2527,7 +2528,7 @@ class Ticket extends DbTestCase {
       $this->boolean($ticket->getFromDB($ticketId))->isTrue();
 
       // Check status
-      $this->integer((int)$ticket->fields['status'])->isEqualTo($expected_status);
+      $this->integer((int)$ticket->fields['status'])->isEqualTo($expected);
    }
 
    public function testLocationAssignment() {
@@ -2602,6 +2603,9 @@ class Ticket extends DbTestCase {
    }
 
    public function testCronPurgeTicket() {
+
+      $this->login(); // must be logged as Document_Item uses Session::getLoginUserID()
+
       global $DB;
       // set default calendar and autoclose delay in root entity
       $entity = new \Entity;
@@ -2738,7 +2742,6 @@ class Ticket extends DbTestCase {
          'itemtype'     => 'Ticket',
          'items_id'     => $ticket2,
          'documents_id' => $documents_id,
-         'users_id'     => false,
          'entities_id'  => '0',
          'is_recursive' => 0
       ]);
@@ -2746,7 +2749,6 @@ class Ticket extends DbTestCase {
          'itemtype'     => 'Ticket',
          'items_id'     => $ticket1,
          'documents_id' => $documents_id,
-         'users_id'     => false,
          'entities_id'  => '0',
          'is_recursive' => 0
       ]);
@@ -2754,7 +2756,6 @@ class Ticket extends DbTestCase {
          'itemtype'     => 'Ticket',
          'items_id'     => $ticket1,
          'documents_id' => $documents_id2,
-         'users_id'     => false,
          'entities_id'  => '0',
          'is_recursive' => 0
       ]);
@@ -2762,7 +2763,6 @@ class Ticket extends DbTestCase {
          'itemtype'     => 'Ticket',
          'items_id'     => $ticket2,
          'documents_id' => $documents_id3,
-         'users_id'     => false,
          'entities_id'  => '0',
          'is_recursive' => 0
       ]);
@@ -2770,7 +2770,6 @@ class Ticket extends DbTestCase {
          'itemtype'     => 'Ticket',
          'items_id'     => $ticket3,
          'documents_id' => $documents_id3,
-         'users_id'     => false,
          'entities_id'  => '0',
          'is_recursive' => 0
       ]);
@@ -3062,6 +3061,9 @@ class Ticket extends DbTestCase {
    }
 
    public function testScreenshotConvertedIntoDocument() {
+
+      $this->login(); // must be logged as Document_Item uses Session::getLoginUserID()
+
       // Test uploads for item creation
       $base64Image = base64_encode(file_get_contents(__DIR__ . '/../fixtures/uploads/foo.png'));
       $filename = '5e5e92ffd9bd91.11111111image_paste22222222.png';
@@ -3108,6 +3110,9 @@ class Ticket extends DbTestCase {
    }
 
    public function testUploadDocuments() {
+
+      $this->login(); // must be logged as Document_Item uses Session::getLoginUserID()
+
       // Test uploads for item creation
       $filename = '5e5e92ffd9bd91.11111111' . 'foo.txt';
       $instance = new \Ticket();
@@ -3186,5 +3191,45 @@ class Ticket extends DbTestCase {
             $_SESSION['glpiactiveprofile']['tickettemplates_id'] = $session_tpl_id_back;
          }
       )->contains('src="data:image/png;base64,' . $base64Image . '"');
+   }
+
+
+   public function testCanDelegateeCreateTicket() {
+      $normal_id   = getItemByTypeName('User', 'normal', true);
+      $tech_id     = getItemByTypeName('User', 'tech', true);
+      $postonly_id = getItemByTypeName('User', 'post-only', true);
+      $tuser_id    = getItemByTypeName('User', TU_USER, true);
+
+      // check base behavior (only standard interface can create for other users)
+      $this->login();
+      $this->boolean(\Ticket::canDelegateeCreateTicket($normal_id))->isTrue();
+      $this->login('tech', 'tech');
+      $this->boolean(\Ticket::canDelegateeCreateTicket($normal_id))->isTrue();
+      $this->login('post-only', 'postonly');
+      $this->boolean(\Ticket::canDelegateeCreateTicket($normal_id))->isFalse();
+
+      // create a test group
+      $group = new \Group;
+      $groups_id = $group->add(['name' => 'test delegatee']);
+      $this->integer($groups_id)->isGreaterThan(0);
+
+      // make postonly delegate of the group
+      $gu = new \Group_User;
+      $this->integer($gu->add([
+         'users_id'         => $postonly_id,
+         'groups_id'        => $groups_id,
+         'is_userdelegate' => 1,
+      ]))->isGreaterThan(0);
+      $this->integer($gu->add([
+         'users_id'  => $normal_id,
+         'groups_id' => $groups_id,
+      ]))->isGreaterThan(0);
+
+      // check postonly can now create (yes for normal and himself) or not (no for others) for other users
+      $this->login('post-only', 'postonly');
+      $this->boolean(\Ticket::canDelegateeCreateTicket($postonly_id))->isTrue();
+      $this->boolean(\Ticket::canDelegateeCreateTicket($normal_id))->isTrue();
+      $this->boolean(\Ticket::canDelegateeCreateTicket($tech_id))->isFalse();
+      $this->boolean(\Ticket::canDelegateeCreateTicket($tuser_id))->isFalse();
    }
 }

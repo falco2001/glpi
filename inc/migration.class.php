@@ -5,7 +5,7 @@ use Glpi\Console\Application;
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -106,7 +106,6 @@ class Migration {
    **/
    function setVersion($ver) {
 
-      $this->flushLogDisplayMessage();
       $this->version = $ver;
       $this->addNewMessageArea("migration_message_$ver");
    }
@@ -158,12 +157,13 @@ class Migration {
    **/
    function displayMessage($msg) {
 
+      $this->flushLogDisplayMessage();
+
       $now = time();
       $tps = Html::timestampToString($now-$this->deb);
 
       $this->outputMessage("{$msg} ({$tps})", null, $this->current_message_area_id);
 
-      $this->flushLogDisplayMessage();
       $this->lastMessage = ['time' => time(),
                             'msg'  => $msg];
    }
@@ -203,6 +203,8 @@ class Migration {
     * @return void
    **/
    function displayTitle($title) {
+      $this->flushLogDisplayMessage();
+
       $this->outputMessage($title, 'title');
    }
 
@@ -1264,8 +1266,7 @@ class Migration {
             throw new \RuntimeException(
                sprintf(
                   'Table "%s" does not exists.',
-                  $old_table,
-                  $new_table
+                  $old_table
                )
             );
          }
@@ -1287,7 +1288,7 @@ class Migration {
                'FROM'   => 'information_schema.columns',
                'WHERE'  => [
                   'table_schema' => $DB->dbdefault,
-                  'table_name'   => ['LIKE', 'glpi_%'],
+                  'table_name'   => ['LIKE', 'glpi\_%'],
                   'OR' => [
                      ['column_name'  => $old_fkey],
                      ['column_name'  => ['LIKE', $old_fkey . '_%']],
@@ -1353,7 +1354,7 @@ class Migration {
             'FROM'   => 'information_schema.columns',
             'WHERE'  => [
                'table_schema' => $DB->dbdefault,
-               'table_name'   => ['LIKE', 'glpi_%'],
+               'table_name'   => ['LIKE', 'glpi\_%'],
                'OR' => [
                   ['column_name'  => 'itemtype'],
                   ['column_name'  => ['LIKE', 'itemtype_%']],

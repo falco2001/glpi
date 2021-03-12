@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -38,6 +38,7 @@ if (!defined('GLPI_ROOT')) {
  *  Contract class
  */
 class Contract extends CommonDBTM {
+   use Glpi\Features\Clonable;
 
    // From CommonDBTM
    public $dohistory                   = true;
@@ -45,6 +46,15 @@ class Contract extends CommonDBTM {
 
    static $rightname                   = 'contract';
    protected $usenotepad               = true;
+
+
+   public function getCloneRelations() :array {
+      return [
+         Contract_Item::class,
+         Contract_Supplier::class,
+         ContractCost::class,
+      ];
+   }
 
 
 
@@ -130,28 +140,6 @@ class Contract extends CommonDBTM {
    }
 
 
-   function prepareInputForAdd($input) {
-
-      if (isset($input["id"]) && $input["id"]>0) {
-         $input["_oldID"] = $input["id"];
-      }
-      unset($input['id']);
-      unset($input['withtemplate']);
-
-      return $input;
-   }
-
-
-   function post_addItem() {
-
-      // Manage add from template
-      if (isset($this->input["_oldID"])) {
-         // ADD Devices
-         ContractCost::cloneContract($this->input["_oldID"], $this->fields['id']);
-      }
-   }
-
-
    function pre_updateInDB() {
 
       // Clean end alert if begin_date is after old one
@@ -200,7 +188,7 @@ class Contract extends CommonDBTM {
       echo "<td>".__('Name')."</td><td>";
       Html::autocompletionTextField($this, "name");
       echo "</td>";
-      echo "<td>".__('Contract type')."</td><td >";
+      echo "<td>".ContractType::getTypeName(1)."</td><td >";
       ContractType::dropdown(['value' => $this->fields["contracttypes_id"]]);
       echo "</td></tr>";
 
@@ -293,7 +281,7 @@ class Contract extends CommonDBTM {
       echo "<td>".__('Max number of items')."</td><td>";
       Dropdown::showNumber("max_links_allowed", ['value' => $this->fields["max_links_allowed"],
                                                       'min'   => 1,
-                                                      'max'   => 200,
+                                                      'max'   => 200000,
                                                       'step'  => 1,
                                                       'toadd' => [0 => __('Unlimited')]]);
       echo "</td></tr>";
@@ -438,7 +426,7 @@ class Contract extends CommonDBTM {
          'id'                 => '129',
          'table'              => 'glpi_contracttypes',
          'field'              => 'name',
-         'name'               => __('Type'),
+         'name'               => _n('Type', 'Types', 1),
          'datatype'           => 'dropdown',
          'massiveaction'      => false,
          'joinparams'         => [
@@ -542,7 +530,7 @@ class Contract extends CommonDBTM {
          'id'                 => '136',
          'table'              => 'glpi_contractcosts',
          'field'              => 'totalcost',
-         'name'               => __('Cost'),
+         'name'               => _n('Cost', 'Costs', 1),
          'forcegroupby'       => true,
          'usehaving'          => true,
          'datatype'           => 'decimal',
@@ -551,7 +539,8 @@ class Contract extends CommonDBTM {
          'computation'        =>
             '(SUM(' . $DB->quoteName('TABLE.cost') . ') / COUNT(' .
             $DB->quoteName('TABLE.id') . ')) * COUNT(DISTINCT ' .
-            $DB->quoteName('TABLE.id') . ')'
+            $DB->quoteName('TABLE.id') . ')',
+         'nometa'             => true, // cannot GROUP_CONCAT a SUM
       ];
 
       $tab[] = [
@@ -693,7 +682,7 @@ class Contract extends CommonDBTM {
          'id'                 => '4',
          'table'              => 'glpi_contracttypes',
          'field'              => 'name',
-         'name'               => __('Type'),
+         'name'               => _n('Type', 'Types', 1),
          'datatype'           => 'dropdown'
       ];
 
@@ -863,7 +852,7 @@ class Contract extends CommonDBTM {
          'id'                 => '80',
          'table'              => 'glpi_entities',
          'field'              => 'completename',
-         'name'               => __('Entity'),
+         'name'               => Entity::getTypeName(1),
          'massiveaction'      => false,
          'datatype'           => 'dropdown'
       ];
@@ -937,7 +926,7 @@ class Contract extends CommonDBTM {
 
       $tab[] = [
          'id'                 => 'cost',
-         'name'               => __('Cost')
+         'name'               => _n('Cost', 'Costs', 1)
       ];
 
       $tab[] = [
@@ -955,7 +944,8 @@ class Contract extends CommonDBTM {
          'computation'        =>
             '(SUM(' . $DB->quoteName('TABLE.cost') . ') / COUNT(' .
             $DB->quoteName('TABLE.id') . ')) * COUNT(DISTINCT ' .
-            $DB->quoteName('TABLE.id') . ')'
+            $DB->quoteName('TABLE.id') . ')',
+         'nometa'             => true, // cannot GROUP_CONCAT a SUM
       ];
 
       $tab[] = [
@@ -975,7 +965,7 @@ class Contract extends CommonDBTM {
          'id'                 => '42',
          'table'              => 'glpi_contractcosts',
          'field'              => 'begin_date',
-         'name'               => sprintf(__('%1$s - %2$s'), __('Cost'), __('Begin date')),
+         'name'               => sprintf(__('%1$s - %2$s'), _n('Cost', 'Costs', 1), __('Begin date')),
          'datatype'           => 'date',
          'forcegroupby'       => true,
          'massiveaction'      => false,
@@ -988,7 +978,7 @@ class Contract extends CommonDBTM {
          'id'                 => '43',
          'table'              => 'glpi_contractcosts',
          'field'              => 'end_date',
-         'name'               => sprintf(__('%1$s - %2$s'), __('Cost'), __('End date')),
+         'name'               => sprintf(__('%1$s - %2$s'), _n('Cost', 'Costs', 1), __('End date')),
          'datatype'           => 'date',
          'forcegroupby'       => true,
          'massiveaction'      => false,
@@ -1001,7 +991,7 @@ class Contract extends CommonDBTM {
          'id'                 => '44',
          'table'              => 'glpi_contractcosts',
          'field'              => 'name',
-         'name'               => sprintf(__('%1$s - %2$s'), __('Cost'), __('Name')),
+         'name'               => sprintf(__('%1$s - %2$s'), _n('Cost', 'Costs', 1), __('Name')),
          'forcegroupby'       => true,
          'massiveaction'      => false,
          'joinparams'         => [
@@ -1014,7 +1004,7 @@ class Contract extends CommonDBTM {
          'id'                 => '45',
          'table'              => 'glpi_budgets',
          'field'              => 'name',
-         'name'               => sprintf(__('%1$s - %2$s'), __('Cost'), __('Budget')),
+         'name'               => sprintf(__('%1$s - %2$s'), _n('Cost', 'Costs', 1), Budget::getTypeName(1)),
          'datatype'           => 'dropdown',
          'forcegroupby'       => true,
          'massiveaction'      => false,
@@ -1214,7 +1204,7 @@ class Contract extends CommonDBTM {
    /**
     * Cron action on contracts : alert depending of the config : on notice and expire
     *
-    * @param CronTask $task for log, if NULL display (default NULL)
+    * @param CronTask $task CronTask for log, if NULL display (default NULL)
     *
     * @return integer
    **/

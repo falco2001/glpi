@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -41,13 +41,13 @@ class Session extends \DbTestCase {
       $warn_msg = 'There was a warning. Be carefull.';
       $info_msg = 'All goes well. Or not... Who knows ;)';
 
-      $this->array($_SESSION['MESSAGE_AFTER_REDIRECT'])->isEmpty();
+      $this->array($_SESSION)->notHasKey('MESSAGE_AFTER_REDIRECT');
 
       //test add message in cron mode
       $_SESSION['glpicronuserrunning'] = 'cron_phpunit';
       \Session::addMessageAfterRedirect($err_msg, false, ERROR);
       //adding a message in "cron mode" does not add anything in the session
-      $this->array($_SESSION['MESSAGE_AFTER_REDIRECT'])->isEmpty();
+      $this->array($_SESSION)->notHasKey('MESSAGE_AFTER_REDIRECT');
 
       //set not running from cron
       unset($_SESSION['glpicronuserrunning']);
@@ -256,9 +256,9 @@ class Session extends \DbTestCase {
 
       // test with no password expiration
       $tests[] = [
-         'password_last_update'      => date('Y-m-d H:i:s', strtotime('-10 years')),
-         'password_expiration_delay' => -1,
-         'expected_result'           => false,
+         'last_update'      => date('Y-m-d H:i:s', strtotime('-10 years')),
+         'expiration_delay' => -1,
+         'expected_result'  => false,
       ];
 
       // tests with password expiration
@@ -268,9 +268,9 @@ class Session extends \DbTestCase {
       ];
       foreach ($cases as $last_update => $expected_result) {
          $tests[] = [
-            'password_last_update'      => date('Y-m-d H:i:s', strtotime($last_update)),
-            'password_expiration_delay' => 15,
-            'expected_result'           => $expected_result,
+            'last_update'      => date('Y-m-d H:i:s', strtotime($last_update)),
+            'expiration_delay' => 15,
+            'expected_result'  => $expected_result,
          ];
       }
 
@@ -280,9 +280,10 @@ class Session extends \DbTestCase {
    /**
     * @dataProvider mustChangePasswordProvider
     */
-   public function testMustChangePassword(string $last_update, int $exp_delay, bool $expected_result) {
+   public function testMustChangePassword(string $last_update, int $expiration_delay, bool $expected_result) {
       global $CFG_GLPI;
 
+      $this->login();
       $user = new \User();
       $username = 'test_must_change_pass_' . mt_rand();
       $user_id = (int)$user->add([
@@ -295,7 +296,7 @@ class Session extends \DbTestCase {
       $this->boolean($user->update(['id' => $user_id, 'password_last_update' => $last_update]))->isTrue();
 
       $cfg_backup = $CFG_GLPI;
-      $CFG_GLPI['password_expiration_delay'] = $exp_delay;
+      $CFG_GLPI['password_expiration_delay'] = $expiration_delay;
       $CFG_GLPI['password_expiration_lock_delay'] = -1;
       \Session::destroy();
       \Session::start();
@@ -305,5 +306,133 @@ class Session extends \DbTestCase {
 
       $this->boolean($is_logged)->isEqualTo(true);
       $this->boolean(\Session::mustChangePassword())->isEqualTo($expected_result);
+   }
+
+   protected function preferredLanguageProvider() {
+      return [
+         [
+            'header'        => null,
+            'config'        => null,
+            'legacy_config' => null,
+            'expected'      => 'en_GB',
+         ],
+         [
+            'header'        => null,
+            'config'        => null,
+            'legacy_config' => 'it_IT',
+            'expected'      => 'it_IT',
+         ],
+         [
+            'header'        => null,
+            'config'        => 'de_DE',
+            'legacy_config' => null,
+            'expected'      => 'de_DE',
+         ],
+         [
+            'header'        => 'en-US',
+            'config'        => 'fr_FR',
+            'legacy_config' => null,
+            'expected'      => 'en_US',
+         ],
+         [
+            // latin as first choice (not available in GLPI), should fallback to italian
+            'header'        => 'la, it-IT;q=0.9, it;q=0.8',
+            'config'        => 'en_GB',
+            'legacy_config' => null,
+            'expected'      => 'it_IT',
+         ],
+      ];
+   }
+
+   /**
+    * @dataProvider preferredLanguageProvider
+    */
+   public function testGetPreferredLanguage(?string $header, ?string $config, ?string $legacy_config, string $expected) {
+      global $CFG_GLPI;
+
+      $header_backup = $_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? null;
+      $cfg_backup = $CFG_GLPI;
+
+      if ($header !== null) {
+         $_SERVER['HTTP_ACCEPT_LANGUAGE'] = $header;
+      }
+      $CFG_GLPI['language'] = $config;
+      $CFG_GLPI['default_language'] = $legacy_config;
+      $result = \Session::getPreferredLanguage();
+
+      if ($header_backup !== null) {
+         $_SERVER['HTTP_ACCEPT_LANGUAGE'] = $header_backup;
+      }
+      $CFG_GLPI = $cfg_backup;
+
+      $this->string($result)->isEqualTo($expected);
+   }
+
+
+   protected function idorProvider() {
+      return [
+         ['itemtype' => 'Computer'],
+         ['itemtype' => 'Ticket'],
+         ['itemtype' => 'Glpi\\Dashboard\\Item'],
+         ['itemtype' => 'User', 'add_params' => ['right' => 'all']],
+         ['itemtype' => 'User', 'add_params' => ['entity_restrict' => 0]],
+      ];
+   }
+
+   /**
+    * @dataProvider idorProvider
+    */
+   function testIDORToken(string $itemtype = "", array $add_params = []) {
+      // generate token
+      $token = \Session::getNewIDORToken($itemtype, $add_params);
+      $this->string($token)->hasLength(64);
+
+      // token exists in session and is valid
+      $this->array($_SESSION['glpiidortokens'][$token])
+         ->string['itemtype']->isEqualTo($itemtype)
+         ->string['expires'];
+
+      if (count($add_params) > 0) {
+         $this->array($_SESSION['glpiidortokens'][$token])->size->isEqualTo(2 + count($add_params));
+      }
+
+      // validate token with dedicated method
+      $result = \Session::validateIDOR([
+         '_idor_token' => $token,
+         'itemtype'    => $itemtype,
+      ] + $add_params);
+      $this->boolean($result)->isTrue();
+   }
+
+
+   function testDORInvalid() {
+      //  random token
+      $result = \Session::validateIDOR([
+         '_idor_token' => bin2hex(random_bytes(32)),
+         'itemtype'    => 'Computer',
+      ]);
+      $this->boolean($result)->isFalse();
+
+      // bad itemtype
+      $token_bad_itt = \Session::getNewIDORToken('Ticket');
+      $result = \Session::validateIDOR([
+         '_idor_token' => $token_bad_itt,
+         'itemtype'    => 'Computer',
+      ]);
+      $this->boolean($result)->isFalse();
+
+      // missing add params
+      $token_miss_param = \Session::getNewIDORToken('User', ['right' => 'all']);
+      $result = \Session::validateIDOR([
+         '_idor_token' => $token_miss_param,
+         'itemtype'    => 'User',
+      ]);
+      $this->boolean($result)->isFalse();
+      $result = \Session::validateIDOR([
+         '_idor_token' => $token_miss_param,
+         'itemtype'    => 'User',
+         'right'       => 'all'
+      ]);
+      $this->boolean($result)->isTrue();
    }
 }

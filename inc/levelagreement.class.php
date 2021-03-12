@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -187,7 +187,7 @@ abstract class LevelAgreement extends CommonDBChild {
          echo "</td></tr>";
       }
 
-      echo "<tr class='tab_bg_1'><td>".__('Type')."</td>";
+      echo "<tr class='tab_bg_1'><td>"._n('Type', 'Types', 1)."</td>";
       echo "<td>";
       self::getTypeDropdown(['value' => $this->fields["type"]]);
       echo "</td>";
@@ -279,7 +279,7 @@ abstract class LevelAgreement extends CommonDBChild {
                            '</span><br>';
                if ($level->getFromDB($nextaction->fields[$pre.'levels_id'])) {
                   $comment .= '<span class="b spaced">'.
-                                sprintf(__('%1$s: %2$s'), __('Escalation level'),
+                                sprintf(__('%1$s: %2$s'), _n('Escalation level', 'Escalation levels', 1),
                                         $level->getName()).
                               '</span>';
                }
@@ -458,9 +458,9 @@ abstract class LevelAgreement extends CommonDBChild {
             $header_bottom .= "</th>";
          }
          $header_end .= "<th>".__('Name')."</th>";
-         $header_end .= "<th>".__('Type')."</th>";
+         $header_end .= "<th>"._n('Type', 'Types', 1)."</th>";
          $header_end .= "<th>".__('Maximum time')."</th>";
-         $header_end .= "<th>".__('Calendar')."</th>";
+         $header_end .= "<th>"._n('Calendar', 'Calendars', 1)."</th>";
 
          echo $header_begin.$header_top.$header_end;
          foreach ($laList as $val) {
@@ -699,7 +699,7 @@ abstract class LevelAgreement extends CommonDBChild {
          'id'                 => '5',
          'table'              => $this->getTable(),
          'field'              => 'number_time',
-         'name'               => __('Time'),
+         'name'               => _x('hour', 'Time'),
          'datatype'           => 'specific',
          'massiveaction'      => false,
          'nosearch'           => true,
@@ -719,7 +719,7 @@ abstract class LevelAgreement extends CommonDBChild {
          'id'                 => '7',
          'table'              => $this->getTable(),
          'field'              => 'type',
-         'name'               => __('Type'),
+         'name'               => _n('Type', 'Types', 1),
          'datatype'           => 'specific'
       ];
 
@@ -870,7 +870,7 @@ abstract class LevelAgreement extends CommonDBChild {
             $cal          = new Calendar();
             $work_in_days = ($this->fields['definition_time'] == 'day');
 
-            if ($cal->getFromDB($this->fields['calendars_id'])) {
+            if ($cal->getFromDB($this->fields['calendars_id']) && $cal->hasAWorkingDay()) {
                return $cal->computeEndDate($start_date, $delay,
                                            $additional_delay, $work_in_days,
                                            $this->fields['end_of_working_day']);
@@ -912,7 +912,7 @@ abstract class LevelAgreement extends CommonDBChild {
                // Based on a calendar
                if ($this->fields['calendars_id'] > 0) {
                   $cal = new Calendar();
-                  if ($cal->getFromDB($this->fields['calendars_id'])) {
+                  if ($cal->getFromDB($this->fields['calendars_id']) && $cal->hasAWorkingDay()) {
                      return $cal->computeEndDate($start_date, $delay,
                                                  $level->fields['execution_time'] + $additional_delay,
                                                  $work_in_days);

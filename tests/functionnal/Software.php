@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -414,10 +414,10 @@ class Software extends DbTestCase {
    public function testGetSearchOptionsNew() {
       $software = new \Software();
       $result   = $software->rawSearchOptions();
-      $this->array($result)->hasSize(40);
+      $this->array($result)->hasSize(41);
 
       $this->login();
       $result   = $software->rawSearchOptions();
-      $this->array($result)->hasSize(49);
+      $this->array($result)->hasSize(50);
    }
 }

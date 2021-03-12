@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -52,6 +52,19 @@ function isCommandLine() {
  * @return boolean
  */
 function isAPI() {
+   global $CFG_GLPI;
+
+   $called_url = (!empty($_SERVER['HTTPS'] ?? "") && ($_SERVER['HTTPS'] ?? "") !== 'off'
+                     ? 'https'
+                     : 'http').
+                 '://' . ($_SERVER['HTTP_HOST'] ?? "").
+                 ($_SERVER['REQUEST_URI'] ?? "");
+
+   $base_api_url = $CFG_GLPI['url_base_api'] ?? ""; // $CFG_GLPI may be not defined if DB is not available
+   if (!empty($base_api_url) && strpos($called_url, $base_api_url) !== false) {
+      return true;
+   }
+
    $script = isset($_SERVER['SCRIPT_FILENAME']) ? $_SERVER['SCRIPT_FILENAME'] : '';
    if (strpos($script, 'apirest.php') !== false) {
       return true;
@@ -59,6 +72,7 @@ function isAPI() {
    if (strpos($script, 'apixmlrpc.php') !== false) {
       return true;
    }
+
    return false;
 }
 
@@ -73,7 +87,7 @@ function isAPI() {
 function isPluginItemType($classname) {
 
    /** @var array $matches */
-   if (preg_match("/Plugin([A-Z][a-z0-9]+)([A-Z]\w+)/", $classname, $matches)) {
+   if (preg_match("/^Plugin([A-Z][a-z0-9]+)([A-Z]\w+)$/", $classname, $matches)) {
       $plug           = [];
       $plug['plugin'] = $matches[1];
       $plug['class']  = $matches[2];
@@ -389,4 +403,4 @@ if ($needrun) {
 require_once $autoload;
 
 // Use spl autoload to allow stackable autoload.
-spl_autoload_register('glpi_autoload', false, true);
+spl_autoload_register('glpi_autoload', true, true);

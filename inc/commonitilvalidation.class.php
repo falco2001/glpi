@@ -2,7 +2,7 @@
 /**
  * ---------------------------------------------------------------------
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2020 Teclib' and contributors.
+ * Copyright (C) 2015-2021 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
@@ -312,7 +312,7 @@ abstract class CommonITILValidation  extends CommonDBChild {
    function prepareInputForUpdate($input) {
 
       $forbid_fields = [];
-      if ($this->fields["users_id_validate"] == Session::getLoginUserID()) {
+      if ($this->fields["users_id_validate"] == Session::getLoginUserID() && isset($input["status"])) {
          if (($input["status"] == self::REFUSED)
              && (!isset($input["comment_validation"])
                  || ($input["comment_validation"] == ''))) {
@@ -363,10 +363,8 @@ abstract class CommonITILValidation  extends CommonDBChild {
             NotificationEvent::raiseEvent('validation_answer', $item, $options);
          }
 
-          //Set global validation to accepted to define one
-         if (($item->fields['global_validation'] == self::WAITING)
-             && in_array("status", $this->updates)) {
-
+         //if status is updated, update global approval status
+         if (in_array("status", $this->updates)) {
             $input = [
                'id'                => $this->fields[static::$items_id],
                'global_validation' => self::computeValidationStatus($item),
@@ -619,8 +617,8 @@ abstract class CommonITILValidation  extends CommonDBChild {
 
       global $CFG_GLPI;
 
-      $types            = ['user'  => __('User'),
-                                'group' => __('Group')];
+      $types            = ['user'  => User::getTypeName(1),
+                                'group' => Group::getTypeName(1)];
 
       $rand             = Dropdown::showFromArray("validatortype", $types,
                                                   ['display_emptychoice' => true]);
@@ -1004,7 +1002,7 @@ abstract class CommonITILValidation  extends CommonDBChild {
 
       $tab[] = [
          'id'                 => 'common',
-         'name'               => __('Approval')
+         'name'               => CommonITILValidation::getTypeName(1)
       ];
 
       $tab[] = [
@@ -1082,7 +1080,7 @@ abstract class CommonITILValidation  extends CommonDBChild {
 
       $tab[] = [
          'id'                 => 'validation',
-         'name'               => __('Approval')
+         'name'               => CommonITILValidation::getTypeName(1)
       ];
 
       $tab[] = [
@@ -1101,7 +1099,7 @@ abstract class CommonITILValidation  extends CommonDBChild {
          'id'                 => '52',
          'table'              => getTableForItemType(static::$itemtype),
          'field'              => 'global_validation',
-         'name'               => __('Approval'),
+         'name'               => CommonITILValidation::getTypeName(1),
          'searchtype'         => 'equals',
          'datatype'           => 'specific'
       ];
@@ -1176,7 +1174,7 @@ abstract class CommonITILValidation  extends CommonDBChild {
          'id'                 => '58',
          'table'              => 'glpi_users',
          'field'              => 'name',
-         'name'               => __('Requester'),
+         'name'               => _n('Requester', 'Requesters', 1),
          'datatype'           => 'itemlink',
          'right'              => (static::$itemtype == 'Ticket' ? 'create_ticket_validate' : 'create_validate'),
          'forcegroupby'       => true,
@@ -1303,8 +1301,8 @@ abstract class CommonITILValidation  extends CommonDBChild {
          $params[$key] = $val;
       }
 
-      $types = ['user'  => __('User'),
-                     'group' => __('Group')];
+      $types = ['user'  => User::getTypeName(1),
+                     'group' => Group::getTypeName(1)];
 
       $type  = '';
       if (isset($params['users_id_validate']['groups_id'])) {
@@ -1382,8 +1380,6 @@ abstract class CommonITILValidation  extends CommonDBChild {
    **/
    static function computeValidationStatus(CommonITILObject $item) {
 
-      $validation_status  = self::WAITING;
-
       // Percent of validation
       $validation_percent = $item->fields['validation_percent'];
 
@@ -1402,21 +1398,46 @@ abstract class CommonITILValidation  extends CommonDBChild {
          }
       }
 
+      return self::computeValidation(
+         $statuses[self::ACCEPTED] * 100 / $total,
+         $statuses[self::REFUSED]  * 100 / $total,
+         $validation_percent
+      );
+   }
+
+   /**
+    * Compute the validation status from the percentage of acceptation, the
+    * percentage of refusals and the target acceptation threshold
+    *
+    * @param int $accepted             0-100 (percentage of acceptation)
+    * @param int $refused              0-100 (percentage of refusals)
+    * @param int $validation_percent   0-100 (target accepation threshold)
+    *
+    * @return int the validation status : ACCEPTED|REFUSED|WAITING
+    */
+   public static function computeValidation(
+      int $accepted,
+      int $refused,
+      int $validation_percent
+   ): int {
       if ($validation_percent > 0) {
-         if (($statuses[self::ACCEPTED]*100/$total) >= $validation_percent) {
-            $validation_status = self::ACCEPTED;
-         } else if (($statuses[self::REFUSED]*100/$total) >= $validation_percent) {
-            $validation_status = self::REFUSED;
+         if ($accepted >= $validation_percent) {
+            // We have reached the acceptation threshold
+            return self::ACCEPTED;
+         } else if ($refused + $validation_percent > 100) {
+            // We can no longer reach the acceptation threshold
+            return self::REFUSED;
          }
       } else {
-         if ($statuses[self::ACCEPTED]) {
-            $validation_status = self::ACCEPTED;
-         } else if ($statuses[self::REFUSED]) {
-            $validation_status = self::REFUSED;
+         // No validation threshold set, one approval or denial is enough
+         if ($accepted > 0) {
+            return self::ACCEPTED;
+         } else if ($refused > 0) {
+            return self::REFUSED;
          }
       }
 
-      return $validation_status;
+      return self::WAITING;
    }
 
 
